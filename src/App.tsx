@@ -9,6 +9,10 @@ import Devis from '@/pages/Devis';
 import Factures from '@/pages/Factures';
 import Support from '@/pages/Support';
 import Companies from '@/pages/admin/Companies';
+import Users from '@/pages/admin/Users';
+import AdminDevis from '@/pages/admin/AdminDevis';
+import AdminFactures from '@/pages/admin/AdminFactures';
+import AdminSupport from '@/pages/admin/AdminSupport';
 import NotFound from '@/pages/NotFound';
 import { useAuth } from '@/context/AuthContext';
 
@@ -79,6 +83,34 @@ function AppRoutes() {
           <ProtectedRoute>
             <AdminRoute>
               <Companies />
+            </AdminRoute>
+          </ProtectedRoute>
+        } />
+        <Route path="/admin/users" element={
+          <ProtectedRoute>
+            <AdminRoute>
+              <Users />
+            </AdminRoute>
+          </ProtectedRoute>
+        } />
+        <Route path="/admin/devis" element={
+          <ProtectedRoute>
+            <AdminRoute>
+              <AdminDevis />
+            </AdminRoute>
+          </ProtectedRoute>
+        } />
+        <Route path="/admin/factures" element={
+          <ProtectedRoute>
+            <AdminRoute>
+              <AdminFactures />
+            </AdminRoute>
+          </ProtectedRoute>
+        } />
+        <Route path="/admin/support" element={
+          <ProtectedRoute>
+            <AdminRoute>
+              <AdminSupport />
             </AdminRoute>
           </ProtectedRoute>
         } />
