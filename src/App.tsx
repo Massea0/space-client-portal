@@ -8,6 +8,10 @@ import { AuthProvider, useAuth } from "@/context/AuthContext";
 import Layout from "@/components/layout/Layout";
 import LoginForm from "@/components/auth/LoginForm";
 import Dashboard from "@/pages/Dashboard";
+import Factures from "@/pages/Factures";
+import DevisPage from "@/pages/Devis";
+import Support from "@/pages/Support";
+import Companies from "@/pages/admin/Companies";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -30,6 +34,16 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   return <Layout>{children}</Layout>;
 };
 
+const AdminRoute = ({ children }: { children: React.ReactNode }) => {
+  const { user } = useAuth();
+  
+  if (user?.role !== 'admin') {
+    return <Navigate to="/dashboard" replace />;
+  }
+  
+  return <>{children}</>;
+};
+
 const AppContent = () => {
   return (
     <Routes>
@@ -39,6 +53,52 @@ const AppContent = () => {
           <Dashboard />
         </ProtectedRoute>
       } />
+      <Route path="/factures" element={
+        <ProtectedRoute>
+          <Factures />
+        </ProtectedRoute>
+      } />
+      <Route path="/devis" element={
+        <ProtectedRoute>
+          <DevisPage />
+        </ProtectedRoute>
+      } />
+      <Route path="/support" element={
+        <ProtectedRoute>
+          <Support />
+        </ProtectedRoute>
+      } />
+      
+      {/* Admin Routes */}
+      <Route path="/admin/companies" element={
+        <ProtectedRoute>
+          <AdminRoute>
+            <Companies />
+          </AdminRoute>
+        </ProtectedRoute>
+      } />
+      <Route path="/admin/factures" element={
+        <ProtectedRoute>
+          <AdminRoute>
+            <Factures />
+          </AdminRoute>
+        </ProtectedRoute>
+      } />
+      <Route path="/admin/devis" element={
+        <ProtectedRoute>
+          <AdminRoute>
+            <DevisPage />
+          </AdminRoute>
+        </ProtectedRoute>
+      } />
+      <Route path="/admin/support" element={
+        <ProtectedRoute>
+          <AdminRoute>
+            <Support />
+          </AdminRoute>
+        </ProtectedRoute>
+      } />
+      
       <Route path="/" element={<Navigate to="/dashboard" replace />} />
       <Route path="*" element={<NotFound />} />
     </Routes>

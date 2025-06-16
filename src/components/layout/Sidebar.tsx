@@ -24,7 +24,7 @@ import {
 
 const AppSidebar = () => {
   const { user } = useAuth();
-  const { collapsed } = useSidebar();
+  const { state } = useSidebar();
   const location = useLocation();
 
   const clientMenuItems = [
@@ -84,6 +84,7 @@ const AppSidebar = () => {
   ];
 
   const menuItems = user?.role === 'admin' ? adminMenuItems : clientMenuItems;
+  const collapsed = state === 'collapsed';
 
   const isActive = (path: string) => location.pathname === path;
 
