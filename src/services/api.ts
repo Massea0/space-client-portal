@@ -2,7 +2,8 @@
 // Mock API service that simulates backend operations
 // This can be easily replaced with real Supabase calls later
 
-import { Devis, Invoice, Ticket, Company, User } from '@/types';
+import { Devis, Invoice, Ticket, Company } from '@/types';
+import { User } from '@/types/auth';
 import { MOCK_DEVIS, MOCK_INVOICES, MOCK_TICKETS, MOCK_COMPANIES } from '@/data/mockData';
 
 // Simulate API delay
