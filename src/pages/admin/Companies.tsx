@@ -1,44 +1,124 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { formatDate } from '@/lib/utils';
-import { MOCK_COMPANIES } from '@/data/mockData';
+import { useToast } from '@/hooks/useToast';
+import { companiesApi } from '@/services/api';
 import { Company } from '@/types';
 import { Plus, Search, Building, Mail, Phone, MapPin, Edit, Users } from 'lucide-react';
 
 const Companies = () => {
+  const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState('');
   const [showNewCompanyDialog, setShowNewCompanyDialog] = useState(false);
+  const [editingCompany, setEditingCompany] = useState<Company | null>(null);
   const [newCompany, setNewCompany] = useState({
     name: '',
     email: '',
     phone: '',
     address: ''
   });
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+
+  const loadCompanies = async () => {
+    try {
+      setLoading(true);
+      const data = await companiesApi.getAll();
+      setCompanies(data);
+    } catch (error) {
+      toast({
+        title: 'Erreur',
+        description: 'Impossible de charger les entreprises',
+        variant: 'error'
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadCompanies();
+  }, []);
 
   // Apply search filter
-  const filteredCompanies = MOCK_COMPANIES.filter(company =>
+  const filteredCompanies = companies.filter(company =>
     company.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     company.email.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const handleCreateCompany = () => {
+  const handleCreateCompany = async () => {
     if (!newCompany.name.trim() || !newCompany.email.trim()) return;
     
-    console.log('Créer nouvelle entreprise:', newCompany);
-    // TODO: Implement company creation
-    
-    setNewCompany({ name: '', email: '', phone: '', address: '' });
-    setShowNewCompanyDialog(false);
+    try {
+      setActionLoading('create');
+      await companiesApi.create(newCompany);
+      await loadCompanies();
+      
+      setNewCompany({ name: '', email: '', phone: '', address: '' });
+      setShowNewCompanyDialog(false);
+      
+      toast({
+        title: 'Succès',
+        description: 'Entreprise créée avec succès',
+        variant: 'success'
+      });
+    } catch (error) {
+      toast({
+        title: 'Erreur',
+        description: 'Impossible de créer l\'entreprise',
+        variant: 'error'
+      });
+    } finally {
+      setActionLoading(null);
+    }
   };
 
-  const handleEditCompany = (companyId: string) => {
-    console.log('Modifier entreprise:', companyId);
-    // TODO: Implement company editing
+  const handleEditCompany = async () => {
+    if (!editingCompany) return;
+    
+    try {
+      setActionLoading('edit');
+      await companiesApi.update(editingCompany.id, {
+        name: editingCompany.name,
+        email: editingCompany.email,
+        phone: editingCompany.phone,
+        address: editingCompany.address
+      });
+      
+      await loadCompanies();
+      setEditingCompany(null);
+      
+      toast({
+        title: 'Succès',
+        description: 'Entreprise modifiée avec succès',
+        variant: 'success'
+      });
+    } catch (error) {
+      toast({
+        title: 'Erreur',
+        description: 'Impossible de modifier l\'entreprise',
+        variant: 'error'
+      });
+    } finally {
+      setActionLoading(null);
+    }
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-arcadis-orange mx-auto"></div>
+          <p className="mt-4 text-slate-600">Chargement des entreprises...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -109,9 +189,9 @@ const Companies = () => {
                 </Button>
                 <Button
                   onClick={handleCreateCompany}
-                  disabled={!newCompany.name.trim() || !newCompany.email.trim()}
+                  disabled={!newCompany.name.trim() || !newCompany.email.trim() || actionLoading === 'create'}
                 >
-                  Créer l'entreprise
+                  {actionLoading === 'create' ? 'Création...' : 'Créer l\'entreprise'}
                 </Button>
               </div>
             </div>
@@ -151,13 +231,75 @@ const Companies = () => {
                     </p>
                   </div>
                 </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => handleEditCompany(company.id)}
-                >
-                  <Edit className="h-4 w-4" />
-                </Button>
+                
+                <Dialog>
+                  <DialogTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setEditingCompany(company)}
+                    >
+                      <Edit className="h-4 w-4" />
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-2xl">
+                    <DialogHeader>
+                      <DialogTitle>Modifier l'entreprise</DialogTitle>
+                    </DialogHeader>
+                    {editingCompany && (
+                      <div className="space-y-4">
+                        <div>
+                          <label className="block text-sm font-medium text-slate-700 mb-2">
+                            Nom de l'entreprise *
+                          </label>
+                          <Input
+                            value={editingCompany.name}
+                            onChange={(e) => setEditingCompany({ ...editingCompany, name: e.target.value })}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-slate-700 mb-2">
+                            Email de contact *
+                          </label>
+                          <Input
+                            type="email"
+                            value={editingCompany.email}
+                            onChange={(e) => setEditingCompany({ ...editingCompany, email: e.target.value })}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-slate-700 mb-2">
+                            Téléphone
+                          </label>
+                          <Input
+                            value={editingCompany.phone}
+                            onChange={(e) => setEditingCompany({ ...editingCompany, phone: e.target.value })}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-slate-700 mb-2">
+                            Adresse
+                          </label>
+                          <Input
+                            value={editingCompany.address}
+                            onChange={(e) => setEditingCompany({ ...editingCompany, address: e.target.value })}
+                          />
+                        </div>
+                        <div className="flex gap-2 justify-end">
+                          <Button variant="outline" onClick={() => setEditingCompany(null)}>
+                            Annuler
+                          </Button>
+                          <Button
+                            onClick={handleEditCompany}
+                            disabled={!editingCompany.name.trim() || !editingCompany.email.trim() || actionLoading === 'edit'}
+                          >
+                            {actionLoading === 'edit' ? 'Modification...' : 'Sauvegarder'}
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </DialogContent>
+                </Dialog>
               </div>
             </CardHeader>
             <CardContent className="space-y-3">
@@ -189,7 +331,7 @@ const Companies = () => {
         ))}
       </div>
 
-      {filteredCompanies.length === 0 && (
+      {filteredCompanies.length === 0 && !loading && (
         <Card>
           <CardContent className="p-8 text-center">
             <Building className="h-12 w-12 text-slate-300 mx-auto mb-4" />

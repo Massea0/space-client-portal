@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -8,12 +9,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { formatDateTime } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
-import { MOCK_TICKETS } from '@/data/mockData';
+import { useToast } from '@/hooks/useToast';
+import { ticketsApi } from '@/services/api';
 import { Ticket } from '@/types';
 import { Plus, Search, Filter, MessageSquare, Paperclip, Send } from 'lucide-react';
 
 const Support = () => {
   const { user } = useAuth();
+  const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [priorityFilter, setPriorityFilter] = useState<string>('all');
@@ -22,11 +25,31 @@ const Support = () => {
   const [newTicketDescription, setNewTicketDescription] = useState('');
   const [newMessage, setNewMessage] = useState('');
   const [showNewTicketDialog, setShowNewTicketDialog] = useState(false);
+  const [tickets, setTickets] = useState<Ticket[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
 
-  // Filter tickets based on user role
-  const tickets = user?.role === 'admin' 
-    ? MOCK_TICKETS 
-    : MOCK_TICKETS.filter(ticket => ticket.companyId === user?.companyId);
+  const loadTickets = async () => {
+    try {
+      setLoading(true);
+      const data = user?.role === 'admin' 
+        ? await ticketsApi.getAll()
+        : await ticketsApi.getByCompany(user?.companyId || '');
+      setTickets(data);
+    } catch (error) {
+      toast({
+        title: 'Erreur',
+        description: 'Impossible de charger les tickets',
+        variant: 'error'
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadTickets();
+  }, [user]);
 
   // Apply search and filters
   const filteredTickets = tickets.filter(ticket => {
@@ -82,27 +105,107 @@ const Support = () => {
     );
   };
 
-  const handleCreateTicket = () => {
+  const handleCreateTicket = async () => {
     if (!newTicketSubject.trim() || !newTicketDescription.trim()) return;
     
-    console.log('Créer nouveau ticket:', {
-      subject: newTicketSubject,
-      description: newTicketDescription
-    });
-    
-    // TODO: Implement ticket creation
-    setNewTicketSubject('');
-    setNewTicketDescription('');
-    setShowNewTicketDialog(false);
+    try {
+      setActionLoading('create');
+      await ticketsApi.create({
+        subject: newTicketSubject,
+        description: newTicketDescription,
+        companyId: user?.companyId || '',
+        companyName: user?.companyName || ''
+      });
+      
+      await loadTickets();
+      setNewTicketSubject('');
+      setNewTicketDescription('');
+      setShowNewTicketDialog(false);
+      
+      toast({
+        title: 'Succès',
+        description: 'Ticket créé avec succès',
+        variant: 'success'
+      });
+    } catch (error) {
+      toast({
+        title: 'Erreur',
+        description: 'Impossible de créer le ticket',
+        variant: 'error'
+      });
+    } finally {
+      setActionLoading(null);
+    }
   };
 
-  const handleSendMessage = () => {
+  const handleSendMessage = async () => {
     if (!newMessage.trim() || !selectedTicket) return;
     
-    console.log('Envoyer message:', newMessage, 'Ticket:', selectedTicket.id);
-    // TODO: Implement message sending
-    setNewMessage('');
+    try {
+      setActionLoading('message');
+      const updatedTicket = await ticketsApi.addMessage(selectedTicket.id, {
+        content: newMessage,
+        authorId: user?.id || '',
+        authorName: `${user?.firstName} ${user?.lastName}` || '',
+        authorRole: user?.role === 'admin' ? 'admin' : 'client'
+      });
+      
+      setSelectedTicket(updatedTicket);
+      setNewMessage('');
+      await loadTickets();
+      
+      toast({
+        title: 'Succès',
+        description: 'Message envoyé',
+        variant: 'success'
+      });
+    } catch (error) {
+      toast({
+        title: 'Erreur',
+        description: 'Impossible d\'envoyer le message',
+        variant: 'error'
+      });
+    } finally {
+      setActionLoading(null);
+    }
   };
+
+  const handleUpdateTicketStatus = async (ticketId: string, status: Ticket['status']) => {
+    try {
+      setActionLoading(ticketId);
+      await ticketsApi.updateStatus(ticketId, status);
+      await loadTickets();
+      
+      if (selectedTicket?.id === ticketId) {
+        setSelectedTicket(prev => prev ? { ...prev, status } : null);
+      }
+      
+      toast({
+        title: 'Succès',
+        description: `Ticket ${status === 'resolved' ? 'résolu' : 'fermé'}`,
+        variant: 'success'
+      });
+    } catch (error) {
+      toast({
+        title: 'Erreur',
+        description: 'Impossible de mettre à jour le ticket',
+        variant: 'error'
+      });
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-arcadis-orange mx-auto"></div>
+          <p className="mt-4 text-slate-600">Chargement des tickets...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -156,9 +259,9 @@ const Support = () => {
                   </Button>
                   <Button
                     onClick={handleCreateTicket}
-                    disabled={!newTicketSubject.trim() || !newTicketDescription.trim()}
+                    disabled={!newTicketSubject.trim() || !newTicketDescription.trim() || actionLoading === 'create'}
                   >
-                    Créer le ticket
+                    {actionLoading === 'create' ? 'Création...' : 'Créer le ticket'}
                   </Button>
                 </div>
               </div>
@@ -261,7 +364,31 @@ const Support = () => {
                     </DialogTrigger>
                     <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
                       <DialogHeader>
-                        <DialogTitle>Ticket #{ticket.number} - {ticket.subject}</DialogTitle>
+                        <DialogTitle className="flex items-center justify-between">
+                          <span>Ticket #{ticket.number} - {ticket.subject}</span>
+                          {user?.role === 'admin' && ticket.status !== 'closed' && (
+                            <div className="flex gap-2">
+                              {ticket.status !== 'resolved' && (
+                                <Button
+                                  size="sm"
+                                  onClick={() => handleUpdateTicketStatus(ticket.id, 'resolved')}
+                                  disabled={actionLoading === ticket.id}
+                                  className="bg-green-600 hover:bg-green-700"
+                                >
+                                  Marquer résolu
+                                </Button>
+                              )}
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleUpdateTicketStatus(ticket.id, 'closed')}
+                                disabled={actionLoading === ticket.id}
+                              >
+                                Fermer
+                              </Button>
+                            </div>
+                          )}
+                        </DialogTitle>
                       </DialogHeader>
                       
                       {selectedTicket && (
@@ -338,7 +465,7 @@ const Support = () => {
                                 />
                                 <Button
                                   onClick={handleSendMessage}
-                                  disabled={!newMessage.trim()}
+                                  disabled={!newMessage.trim() || actionLoading === 'message'}
                                   className="self-end"
                                 >
                                   <Send className="h-4 w-4" />
@@ -357,7 +484,7 @@ const Support = () => {
         ))}
       </div>
 
-      {filteredTickets.length === 0 && (
+      {filteredTickets.length === 0 && !loading && (
         <Card>
           <CardContent className="p-8 text-center">
             <p className="text-slate-500">Aucun ticket trouvé</p>

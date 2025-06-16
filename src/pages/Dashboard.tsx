@@ -1,9 +1,10 @@
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import StatsCard from '@/components/dashboard/StatsCard';
 import RecentActivity from '@/components/dashboard/RecentActivity';
-import { MOCK_DEVIS, MOCK_INVOICES, MOCK_TICKETS } from '@/data/mockData';
+import { devisApi, invoicesApi, ticketsApi } from '@/services/api';
+import { Devis, Invoice, Ticket } from '@/types';
 import { 
   CreditCard, 
   FileText, 
@@ -15,30 +16,46 @@ import {
 
 const Dashboard = () => {
   const { user } = useAuth();
+  const [devisList, setDevisList] = useState<Devis[]>([]);
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [tickets, setTickets] = useState<Ticket[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  // Filter data based on user role
-  const userDevis = user?.role === 'admin' 
-    ? MOCK_DEVIS 
-    : MOCK_DEVIS.filter(d => d.companyId === user?.companyId);
-    
-  const userInvoices = user?.role === 'admin' 
-    ? MOCK_INVOICES 
-    : MOCK_INVOICES.filter(i => i.companyId === user?.companyId);
-    
-  const userTickets = user?.role === 'admin' 
-    ? MOCK_TICKETS 
-    : MOCK_TICKETS.filter(t => t.companyId === user?.companyId);
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        setLoading(true);
+        const [devisData, invoicesData, ticketsData] = await Promise.all([
+          user?.role === 'admin' ? devisApi.getAll() : devisApi.getByCompany(user?.companyId || ''),
+          user?.role === 'admin' ? invoicesApi.getAll() : invoicesApi.getByCompany(user?.companyId || ''),
+          user?.role === 'admin' ? ticketsApi.getAll() : ticketsApi.getByCompany(user?.companyId || '')
+        ]);
+        
+        setDevisList(devisData);
+        setInvoices(invoicesData);
+        setTickets(ticketsData);
+      } catch (error) {
+        console.error('Error loading dashboard data:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (user) {
+      loadData();
+    }
+  }, [user]);
 
   // Calculate stats
-  const pendingDevis = userDevis.filter(d => d.status === 'pending').length;
-  const totalDevisAmount = userDevis.reduce((sum, d) => sum + d.amount, 0);
-  const pendingInvoices = userInvoices.filter(i => i.status === 'pending').length;
-  const totalInvoiceAmount = userInvoices.reduce((sum, i) => sum + i.amount, 0);
-  const openTickets = userTickets.filter(t => t.status === 'open' || t.status === 'in_progress').length;
+  const pendingDevis = devisList.filter(d => d.status === 'pending').length;
+  const totalDevisAmount = devisList.reduce((sum, d) => sum + d.amount, 0);
+  const pendingInvoices = invoices.filter(i => i.status === 'pending').length;
+  const totalInvoiceAmount = invoices.reduce((sum, i) => sum + i.amount, 0);
+  const openTickets = tickets.filter(t => t.status === 'open' || t.status === 'in_progress').length;
 
   // Recent activities
   const recentActivities = [
-    ...userDevis.slice(0, 2).map(d => ({
+    ...devisList.slice(0, 2).map(d => ({
       id: d.id,
       type: 'devis' as const,
       title: d.object,
@@ -46,7 +63,7 @@ const Dashboard = () => {
       date: d.createdAt,
       status: d.status
     })),
-    ...userInvoices.slice(0, 2).map(i => ({
+    ...invoices.slice(0, 2).map(i => ({
       id: i.id,
       type: 'invoice' as const,
       title: `Facture ${i.number}`,
@@ -54,7 +71,7 @@ const Dashboard = () => {
       date: i.createdAt,
       status: i.status
     })),
-    ...userTickets.slice(0, 2).map(t => ({
+    ...tickets.slice(0, 2).map(t => ({
       id: t.id,
       type: 'ticket' as const,
       title: t.subject,
@@ -67,6 +84,17 @@ const Dashboard = () => {
   const formatCurrency = (amount: number) => {
     return `${amount.toLocaleString()} FCFA`;
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-arcadis-orange mx-auto"></div>
+          <p className="mt-4 text-slate-600">Chargement du tableau de bord...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 animate-fade-in">

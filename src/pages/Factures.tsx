@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -6,19 +7,41 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
-import { MOCK_INVOICES } from '@/data/mockData';
+import { useToast } from '@/hooks/useToast';
+import { invoicesApi } from '@/services/api';
 import { Invoice } from '@/types';
-import { Download, Search, Filter } from 'lucide-react';
+import { Download, Search, Filter, CheckCircle } from 'lucide-react';
 
 const Factures = () => {
   const { user } = useAuth();
+  const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
 
-  // Filter invoices based on user role
-  const invoices = user?.role === 'admin' 
-    ? MOCK_INVOICES 
-    : MOCK_INVOICES.filter(invoice => invoice.companyId === user?.companyId);
+  const loadInvoices = async () => {
+    try {
+      setLoading(true);
+      const data = user?.role === 'admin' 
+        ? await invoicesApi.getAll()
+        : await invoicesApi.getByCompany(user?.companyId || '');
+      setInvoices(data);
+    } catch (error) {
+      toast({
+        title: 'Erreur',
+        description: 'Impossible de charger les factures',
+        variant: 'error'
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadInvoices();
+  }, [user]);
 
   // Apply search and filters
   const filteredInvoices = invoices.filter(invoice => {
@@ -48,10 +71,45 @@ const Factures = () => {
     );
   };
 
-  const handleDownload = (invoiceId: string) => {
-    console.log('Télécharger la facture:', invoiceId);
-    // TODO: Implement PDF download
+  const handleMarkAsPaid = async (invoiceId: string) => {
+    try {
+      setActionLoading(invoiceId);
+      await invoicesApi.updateStatus(invoiceId, 'paid');
+      await loadInvoices();
+      toast({
+        title: 'Succès',
+        description: 'Facture marquée comme payée',
+        variant: 'success'
+      });
+    } catch (error) {
+      toast({
+        title: 'Erreur',
+        description: 'Impossible de mettre à jour la facture',
+        variant: 'error'
+      });
+    } finally {
+      setActionLoading(null);
+    }
   };
+
+  const handleDownload = (invoiceId: string) => {
+    toast({
+      title: 'Information',
+      description: 'Génération PDF en cours de développement',
+      variant: 'warning'
+    });
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-arcadis-orange mx-auto"></div>
+          <p className="mt-4 text-slate-600">Chargement des factures...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -131,15 +189,29 @@ const Factures = () => {
                   <div className="text-2xl font-bold text-slate-900">
                     {formatCurrency(invoice.amount)}
                   </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleDownload(invoice.id)}
-                    className="flex items-center gap-2"
-                  >
-                    <Download className="h-4 w-4" />
-                    Télécharger PDF
-                  </Button>
+                  <div className="flex flex-col gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleDownload(invoice.id)}
+                      className="flex items-center gap-2"
+                    >
+                      <Download className="h-4 w-4" />
+                      Télécharger PDF
+                    </Button>
+                    
+                    {user?.role === 'admin' && invoice.status === 'pending' && (
+                      <Button
+                        size="sm"
+                        onClick={() => handleMarkAsPaid(invoice.id)}
+                        disabled={actionLoading === invoice.id}
+                        className="flex items-center gap-2 bg-green-600 hover:bg-green-700"
+                      >
+                        <CheckCircle className="h-4 w-4" />
+                        {actionLoading === invoice.id ? 'En cours...' : 'Marquer comme payée'}
+                      </Button>
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -165,7 +237,7 @@ const Factures = () => {
         ))}
       </div>
 
-      {filteredInvoices.length === 0 && (
+      {filteredInvoices.length === 0 && !loading && (
         <Card>
           <CardContent className="p-8 text-center">
             <p className="text-slate-500">Aucune facture trouvée</p>

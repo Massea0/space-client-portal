@@ -1,40 +1,36 @@
 
-import { Toaster } from "@/components/ui/toaster";
-import { Toaster as Sonner } from "@/components/ui/sonner";
-import { TooltipProvider } from "@/components/ui/tooltip";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { AuthProvider, useAuth } from "@/context/AuthContext";
-import Layout from "@/components/layout/Layout";
-import LoginForm from "@/components/auth/LoginForm";
-import Dashboard from "@/pages/Dashboard";
-import Factures from "@/pages/Factures";
-import DevisPage from "@/pages/Devis";
-import Support from "@/pages/Support";
-import Companies from "@/pages/admin/Companies";
-import NotFound from "./pages/NotFound";
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { AuthProvider } from '@/context/AuthContext';
+import { ToastProvider } from '@/hooks/useToast';
+import Layout from '@/components/layout/Layout';
+import LoginForm from '@/components/auth/LoginForm';
+import Dashboard from '@/pages/Dashboard';
+import Devis from '@/pages/Devis';
+import Factures from '@/pages/Factures';
+import Support from '@/pages/Support';
+import Companies from '@/pages/admin/Companies';
+import NotFound from '@/pages/NotFound';
+import { useAuth } from '@/context/AuthContext';
 
-const queryClient = new QueryClient();
-
-const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
+function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, isLoading } = useAuth();
   
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-arcadis-blue-primary"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-arcadis-orange"></div>
       </div>
     );
   }
   
   if (!user) {
-    return <LoginForm />;
+    return <Navigate to="/login" replace />;
   }
   
-  return <Layout>{children}</Layout>;
-};
+  return <>{children}</>;
+}
 
-const AdminRoute = ({ children }: { children: React.ReactNode }) => {
+function AdminRoute({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   
   if (user?.role !== 'admin') {
@@ -42,81 +38,67 @@ const AdminRoute = ({ children }: { children: React.ReactNode }) => {
   }
   
   return <>{children}</>;
-};
+}
 
-const AppContent = () => {
+function AppRoutes() {
+  const { user } = useAuth();
+
+  if (!user) {
+    return (
+      <Routes>
+        <Route path="/login" element={<LoginForm />} />
+        <Route path="*" element={<Navigate to="/login" replace />} />
+      </Routes>
+    );
+  }
+
   return (
-    <Routes>
-      <Route path="/login" element={<LoginForm />} />
-      <Route path="/dashboard" element={
-        <ProtectedRoute>
-          <Dashboard />
-        </ProtectedRoute>
-      } />
-      <Route path="/factures" element={
-        <ProtectedRoute>
-          <Factures />
-        </ProtectedRoute>
-      } />
-      <Route path="/devis" element={
-        <ProtectedRoute>
-          <DevisPage />
-        </ProtectedRoute>
-      } />
-      <Route path="/support" element={
-        <ProtectedRoute>
-          <Support />
-        </ProtectedRoute>
-      } />
-      
-      {/* Admin Routes */}
-      <Route path="/admin/companies" element={
-        <ProtectedRoute>
-          <AdminRoute>
-            <Companies />
-          </AdminRoute>
-        </ProtectedRoute>
-      } />
-      <Route path="/admin/factures" element={
-        <ProtectedRoute>
-          <AdminRoute>
+    <Layout>
+      <Routes>
+        <Route path="/dashboard" element={
+          <ProtectedRoute>
+            <Dashboard />
+          </ProtectedRoute>
+        } />
+        <Route path="/devis" element={
+          <ProtectedRoute>
+            <Devis />
+          </ProtectedRoute>
+        } />
+        <Route path="/factures" element={
+          <ProtectedRoute>
             <Factures />
-          </AdminRoute>
-        </ProtectedRoute>
-      } />
-      <Route path="/admin/devis" element={
-        <ProtectedRoute>
-          <AdminRoute>
-            <DevisPage />
-          </AdminRoute>
-        </ProtectedRoute>
-      } />
-      <Route path="/admin/support" element={
-        <ProtectedRoute>
-          <AdminRoute>
+          </ProtectedRoute>
+        } />
+        <Route path="/support" element={
+          <ProtectedRoute>
             <Support />
-          </AdminRoute>
-        </ProtectedRoute>
-      } />
-      
-      <Route path="/" element={<Navigate to="/dashboard" replace />} />
-      <Route path="*" element={<NotFound />} />
-    </Routes>
+          </ProtectedRoute>
+        } />
+        <Route path="/admin/companies" element={
+          <ProtectedRoute>
+            <AdminRoute>
+              <Companies />
+            </AdminRoute>
+          </ProtectedRoute>
+        } />
+        <Route path="/" element={<Navigate to="/dashboard" replace />} />
+        <Route path="*" element={<NotFound />} />
+      </Routes>
+    </Layout>
   );
-};
+}
 
-const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
-        <AuthProvider>
-          <AppContent />
-        </AuthProvider>
-      </BrowserRouter>
-    </TooltipProvider>
-  </QueryClientProvider>
-);
+function App() {
+  return (
+    <Router>
+      <AuthProvider>
+        <ToastProvider>
+          <AppRoutes />
+        </ToastProvider>
+      </AuthProvider>
+    </Router>
+  );
+}
 
 export default App;

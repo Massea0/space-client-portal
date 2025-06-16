@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -8,21 +9,45 @@ import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
-import { MOCK_DEVIS } from '@/data/mockData';
+import { useToast } from '@/hooks/useToast';
+import { devisApi } from '@/services/api';
 import { Devis } from '@/types';
-import { Download, Search, Filter, CheckCircle, XCircle, Clock } from 'lucide-react';
+import { Download, Search, Filter, CheckCircle, XCircle, Plus } from 'lucide-react';
+import DevisForm from '@/components/forms/DevisForm';
 
 const DevisPage = () => {
   const { user } = useAuth();
+  const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [rejectionReason, setRejectionReason] = useState('');
   const [selectedDevis, setSelectedDevis] = useState<Devis | null>(null);
+  const [devisList, setDevisList] = useState<Devis[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [showNewDevisDialog, setShowNewDevisDialog] = useState(false);
 
-  // Filter devis based on user role
-  const devisList = user?.role === 'admin' 
-    ? MOCK_DEVIS 
-    : MOCK_DEVIS.filter(devis => devis.companyId === user?.companyId);
+  const loadDevis = async () => {
+    try {
+      setLoading(true);
+      const data = user?.role === 'admin' 
+        ? await devisApi.getAll()
+        : await devisApi.getByCompany(user?.companyId || '');
+      setDevisList(data);
+    } catch (error) {
+      toast({
+        title: 'Erreur',
+        description: 'Impossible de charger les devis',
+        variant: 'error'
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadDevis();
+  }, [user]);
 
   // Apply search and filters
   const filteredDevis = devisList.filter(devis => {
@@ -59,22 +84,90 @@ const DevisPage = () => {
     );
   };
 
-  const handleApprove = (devisId: string) => {
-    console.log('Approuver le devis:', devisId);
-    // TODO: Implement approval logic
+  const handleApprove = async (devisId: string) => {
+    try {
+      setActionLoading(devisId);
+      await devisApi.updateStatus(devisId, 'approved');
+      await loadDevis();
+      toast({
+        title: 'Succès',
+        description: 'Devis approuvé avec succès',
+        variant: 'success'
+      });
+    } catch (error) {
+      toast({
+        title: 'Erreur',
+        description: 'Impossible d\'approuver le devis',
+        variant: 'error'
+      });
+    } finally {
+      setActionLoading(null);
+    }
   };
 
-  const handleReject = (devisId: string, reason: string) => {
-    console.log('Rejeter le devis:', devisId, 'Raison:', reason);
-    // TODO: Implement rejection logic
-    setRejectionReason('');
-    setSelectedDevis(null);
+  const handleReject = async (devisId: string, reason: string) => {
+    try {
+      setActionLoading(devisId);
+      await devisApi.updateStatus(devisId, 'rejected', reason);
+      await loadDevis();
+      setRejectionReason('');
+      setSelectedDevis(null);
+      toast({
+        title: 'Succès',
+        description: 'Devis rejeté',
+        variant: 'success'
+      });
+    } catch (error) {
+      toast({
+        title: 'Erreur',
+        description: 'Impossible de rejeter le devis',
+        variant: 'error'
+      });
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleCreateDevis = async (devisData: any) => {
+    try {
+      setActionLoading('create');
+      await devisApi.create(devisData);
+      await loadDevis();
+      setShowNewDevisDialog(false);
+      toast({
+        title: 'Succès',
+        description: 'Devis créé avec succès',
+        variant: 'success'
+      });
+    } catch (error) {
+      toast({
+        title: 'Erreur',
+        description: 'Impossible de créer le devis',
+        variant: 'error'
+      });
+    } finally {
+      setActionLoading(null);
+    }
   };
 
   const handleDownload = (devisId: string) => {
-    console.log('Télécharger le devis:', devisId);
-    // TODO: Implement PDF download
+    toast({
+      title: 'Information',
+      description: 'Génération PDF en cours de développement',
+      variant: 'warning'
+    });
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-arcadis-orange mx-auto"></div>
+          <p className="mt-4 text-slate-600">Chargement des devis...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -87,6 +180,24 @@ const DevisPage = () => {
             Consultez et gérez vos devis
           </p>
         </div>
+        
+        {user?.role === 'admin' && (
+          <Dialog open={showNewDevisDialog} onOpenChange={setShowNewDevisDialog}>
+            <DialogTrigger asChild>
+              <Button className="flex items-center gap-2">
+                <Plus className="h-4 w-4" />
+                Nouveau Devis
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
+              <DevisForm
+                onSubmit={handleCreateDevis}
+                onCancel={() => setShowNewDevisDialog(false)}
+                isLoading={actionLoading === 'create'}
+              />
+            </DialogContent>
+          </Dialog>
+        )}
       </div>
 
       {/* Filters */}
@@ -176,10 +287,11 @@ const DevisPage = () => {
                         <Button
                           size="sm"
                           onClick={() => handleApprove(devis.id)}
+                          disabled={actionLoading === devis.id}
                           className="flex items-center gap-2 bg-green-600 hover:bg-green-700"
                         >
                           <CheckCircle className="h-4 w-4" />
-                          Approuver
+                          {actionLoading === devis.id ? 'En cours...' : 'Approuver'}
                         </Button>
                         
                         <Dialog>
@@ -189,6 +301,7 @@ const DevisPage = () => {
                               variant="destructive"
                               onClick={() => setSelectedDevis(devis)}
                               className="flex items-center gap-2"
+                              disabled={actionLoading === devis.id}
                             >
                               <XCircle className="h-4 w-4" />
                               Rejeter
@@ -214,9 +327,9 @@ const DevisPage = () => {
                                 <Button
                                   variant="destructive"
                                   onClick={() => handleReject(devis.id, rejectionReason)}
-                                  disabled={!rejectionReason.trim()}
+                                  disabled={!rejectionReason.trim() || actionLoading === devis.id}
                                 >
-                                  Confirmer le rejet
+                                  {actionLoading === devis.id ? 'En cours...' : 'Confirmer le rejet'}
                                 </Button>
                               </div>
                             </div>
@@ -255,7 +368,7 @@ const DevisPage = () => {
         ))}
       </div>
 
-      {filteredDevis.length === 0 && (
+      {filteredDevis.length === 0 && !loading && (
         <Card>
           <CardContent className="p-8 text-center">
             <p className="text-slate-500">Aucun devis trouvé</p>
