@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { formatDate } from '@/lib/utils';
-import { mockCompanies } from '@/data/mockData';
+import { MOCK_COMPANIES } from '@/data/mockData';
 import { Company } from '@/types';
 import { Plus, Search, Building, Mail, Phone, MapPin, Edit, Users } from 'lucide-react';
 
@@ -20,7 +20,7 @@ const Companies = () => {
   });
 
   // Apply search filter
-  const filteredCompanies = mockCompanies.filter(company =>
+  const filteredCompanies = MOCK_COMPANIES.filter(company =>
     company.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     company.email.toLowerCase().includes(searchTerm.toLowerCase())
   );

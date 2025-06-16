@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -7,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
-import { mockInvoices } from '@/data/mockData';
+import { MOCK_INVOICES } from '@/data/mockData';
 import { Invoice } from '@/types';
 import { Download, Search, Filter } from 'lucide-react';
 
@@ -18,8 +17,8 @@ const Factures = () => {
 
   // Filter invoices based on user role
   const invoices = user?.role === 'admin' 
-    ? mockInvoices 
-    : mockInvoices.filter(invoice => invoice.companyId === user?.companyId);
+    ? MOCK_INVOICES 
+    : MOCK_INVOICES.filter(invoice => invoice.companyId === user?.companyId);
 
   // Apply search and filters
   const filteredInvoices = invoices.filter(invoice => {

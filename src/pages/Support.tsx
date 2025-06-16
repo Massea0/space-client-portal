@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -9,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { formatDateTime } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
-import { mockTickets } from '@/data/mockData';
+import { MOCK_TICKETS } from '@/data/mockData';
 import { Ticket } from '@/types';
 import { Plus, Search, Filter, MessageSquare, Paperclip, Send } from 'lucide-react';
 
@@ -26,8 +25,8 @@ const Support = () => {
 
   // Filter tickets based on user role
   const tickets = user?.role === 'admin' 
-    ? mockTickets 
-    : mockTickets.filter(ticket => ticket.companyId === user?.companyId);
+    ? MOCK_TICKETS 
+    : MOCK_TICKETS.filter(ticket => ticket.companyId === user?.companyId);
 
   // Apply search and filters
   const filteredTickets = tickets.filter(ticket => {
