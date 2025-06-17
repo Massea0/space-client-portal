@@ -1,3 +1,4 @@
+// src/types/auth.ts
 
 export interface User {
   id: string;
@@ -18,6 +19,7 @@ export interface LoginCredentials {
 export interface AuthContextType {
   user: User | null;
   login: (credentials: LoginCredentials) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>; // Changed from () => void to () => Promise<void> as logout is async
   isLoading: boolean;
+  error: string; // Added this line
 }

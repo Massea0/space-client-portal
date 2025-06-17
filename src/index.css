@@ -1,4 +1,3 @@
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -7,83 +6,85 @@
 
 @layer base {
   :root {
-    --background: 248 250 252;
-    --foreground: 15 23 42;
+    --background: 0 0% 100%; /* White */
+    --foreground: 227 58% 21%; /* Dark Navy Blue hsl(227, 58%, 21%) */
 
-    --card: 255 255 255;
-    --card-foreground: 15 23 42;
+    --card: 0 0% 100%; /* White */
+    --card-foreground: 227 58% 21%; /* Dark Navy Blue */
 
-    --popover: 255 255 255;
-    --popover-foreground: 15 23 42;
+    --popover: 0 0% 100%; /* White */
+    --popover-foreground: 227 58% 21%; /* Dark Navy Blue */
 
-    --primary: 30 64 175;
-    --primary-foreground: 248 250 252;
+    --primary: 217 91% 60%; /* Arcadis Blue (hsl(217, 91%, 60%) for #3b82f6) */
+    --primary-foreground: 0 0% 100%; /* White */
 
-    --secondary: 241 245 249;
-    --secondary-foreground: 15 23 42;
+    --secondary: 220 29% 95%; /* Very Light Gray (hsl(220, 29%, 95%) for #f1f5f9) */
+    --secondary-foreground: 227 58% 21%; /* Dark Navy Blue */
 
-    --muted: 241 245 249;
-    --muted-foreground: 100 116 139;
+    --muted: 220 29% 95%; /* Very Light Gray */
+    --muted-foreground: 215 19% 47%; /* Medium Gray (hsl(215, 19%, 47%) for #64748b) */
 
-    --accent: 239 246 255;
-    --accent-foreground: 30 64 175;
+    --accent: 220 87% 93%; /* Very Light Blue (hsl(220, 87%, 93%) for #dbeafe) */
+    --accent-foreground: 224 63% 33%; /* Darker Blue (hsl(224, 63%, 33%) for #1e3a8a) */
 
-    --destructive: 239 68 68;
-    --destructive-foreground: 248 250 252;
+    --destructive: 0 72% 51%; /* Red (hsl(0, 72%, 51%) for #dc2626) */
+    --destructive-foreground: 0 0% 100%; /* White */
 
-    --border: 226 232 240;
-    --input: 226 232 240;
-    --ring: 59 130 246;
+    --border: 220 29% 91%; /* Light Gray Border (hsl(220, 29%, 91%) for #e2e8f0) */
+    --input: 220 29% 91%; /* Input border (background will be var(--background)) */
+    --ring: 217 91% 60%; /* Arcadis Blue for focus rings */
 
     --radius: 0.5rem;
 
-    --sidebar-background: 255 255 255;
-    --sidebar-foreground: 51 65 85;
-    --sidebar-primary: 30 64 175;
-    --sidebar-primary-foreground: 248 250 252;
-    --sidebar-accent: 241 245 249;
-    --sidebar-accent-foreground: 51 65 85;
-    --sidebar-border: 226 232 240;
-    --sidebar-ring: 59 130 246;
+    /* Sidebar Light Theme */
+    --sidebar-background: 220 13% 96%; /* Off-white (hsl(220, 13%, 96%) for #f3f4f6) */
+    --sidebar-foreground: 227 58% 21%; /* Dark Navy Blue */
+    --sidebar-primary: 217 91% 60%; /* Arcadis Blue */
+    --sidebar-primary-foreground: 0 0% 100%; /* White */
+    --sidebar-accent: 220 87% 93%; /* Very Light Blue */
+    --sidebar-accent-foreground: 224 63% 33%; /* Darker Blue */
+    --sidebar-border: 220 29% 91%; /* Light Gray Border */
+    --sidebar-ring: 217 91% 60%; /* Arcadis Blue */
   }
 
   .dark {
-    --background: 15 23 42;
-    --foreground: 248 250 252;
+    --background: 222 39% 11%; /* Almost Black (hsl(222, 39%, 11%) for #111827) */
+    --foreground: 220 13% 90%; /* Light Gray (hsl(220, 13%, 90%) for #e5e7eb) */
 
-    --card: 30 41 59;
-    --card-foreground: 248 250 252;
+    --card: 220 29% 17%; /* Dark Gray (hsl(220, 29%, 17%) for #1f2937) */
+    --card-foreground: 220 13% 90%; /* Light Gray */
 
-    --popover: 30 41 59;
-    --popover-foreground: 248 250 252;
+    --popover: 220 29% 17%; /* Dark Gray */
+    --popover-foreground: 220 13% 90%; /* Light Gray */
 
-    --primary: 96 165 250;
-    --primary-foreground: 15 23 42;
+    --primary: 217 91% 60%; /* Arcadis Blue (hsl(217, 91%, 60%) for #3b82f6) */
+    --primary-foreground: 0 0% 100%; /* White */
 
-    --secondary: 51 65 85;
-    --secondary-foreground: 248 250 252;
+    --secondary: 220 19% 27%; /* Medium-Dark Gray (hsl(220, 19%, 27%) for #374151) */
+    --secondary-foreground: 220 13% 90%; /* Light Gray */
 
-    --muted: 51 65 85;
-    --muted-foreground: 148 163 184;
+    --muted: 220 19% 27%; /* Medium-Dark Gray */
+    --muted-foreground: 220 10% 65%; /* Medium Light Gray (hsl(220, 10%, 65%) for #9ca3af) */
 
-    --accent: 51 65 85;
-    --accent-foreground: 96 165 250;
+    --accent: 221 83% 53%; /* Brighter Blue for Dark Mode (hsl(221, 83%, 53%) for #2563eb) */
+    --accent-foreground: 220 13% 90%; /* Light Gray */
 
-    --destructive: 239 68 68;
-    --destructive-foreground: 248 250 252;
+    --destructive: 0 63% 51%; /* Red (hsl(0, 63%, 51%) for #ef4444) */
+    --destructive-foreground: 0 0% 100%; /* White */
 
-    --border: 51 65 85;
-    --input: 51 65 85;
-    --ring: 96 165 250;
+    --border: 220 14% 36%; /* Medium Gray Border (hsl(220, 14%, 36%) for #4b5563) */
+    --input: 220 14% 36%; /* Input border (background will be var(--background)) */
+    --ring: 217 91% 60%; /* Arcadis Blue for focus rings */
 
-    --sidebar-background: 30 41 59;
-    --sidebar-foreground: 203 213 225;
-    --sidebar-primary: 96 165 250;
-    --sidebar-primary-foreground: 15 23 42;
-    --sidebar-accent: 51 65 85;
-    --sidebar-accent-foreground: 203 213 225;
-    --sidebar-border: 51 65 85;
-    --sidebar-ring: 96 165 250;
+    /* Sidebar Dark Theme */
+    --sidebar-background: 220 29% 17%; /* Dark Gray, same as card */
+    --sidebar-foreground: 220 13% 90%; /* Light Gray */
+    --sidebar-primary: 217 91% 60%; /* Arcadis Blue */
+    --sidebar-primary-foreground: 0 0% 100%; /* White */
+    --sidebar-accent: 221 83% 53%; /* Brighter Blue */
+    --sidebar-accent-foreground: 220 13% 90%; /* Light Gray */
+    --sidebar-border: 220 14% 36%; /* Medium Gray Border */
+    --sidebar-ring: 217 91% 60%; /* Arcadis Blue */
   }
 }
 
@@ -94,27 +95,35 @@
 
   body {
     @apply bg-background text-foreground font-sans;
+    -webkit-font-smoothing: antialiased; /* Améliore le rendu des polices */
+    -moz-osx-font-smoothing: grayscale; /* Améliore le rendu des polices */
   }
 
+  /* Les dégradés Arcadis sont conservés tels quels, mais pourraient aussi utiliser des variables CSS si besoin */
   .arcadis-gradient {
-    background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 50%, #1e40af 100%);
+    background: linear-gradient(135deg, hsl(var(--primary) / 0.8) 0%, hsl(var(--primary)) 50%, hsl(var(--primary) / 1.2) 100%);
   }
 
   .arcadis-gradient-subtle {
-    background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+    background: linear-gradient(135deg, hsl(var(--accent)) 0%, hsl(var(--secondary)) 100%);
   }
 }
 
 @layer components {
+  /* Ces classes personnalisées pourraient être remplacées par l'utilisation directe 
+     des composants Button de shadcn/ui avec les bonnes variantes 
+     pour une meilleure cohérence avec le thème. */
   .arcadis-card {
-    @apply bg-white rounded-lg shadow-sm border border-slate-200 p-6 transition-all duration-200 hover:shadow-md;
+    @apply bg-card text-card-foreground rounded-lg shadow-sm border p-6 transition-all duration-200 hover:shadow-md;
   }
 
   .arcadis-button-primary {
-    @apply bg-arcadis-blue-primary hover:bg-arcadis-blue-dark text-white font-medium px-4 py-2 rounded-md transition-colors duration-200;
+    /* Exemple: utiliser la variante par défaut du bouton shadcn/ui */
+    @apply bg-primary text-primary-foreground hover:bg-primary/90 font-medium px-4 py-2 rounded-md transition-colors duration-200;
   }
 
   .arcadis-button-secondary {
-    @apply bg-white hover:bg-slate-50 text-arcadis-blue-primary border border-arcadis-blue-primary font-medium px-4 py-2 rounded-md transition-colors duration-200;
+    /* Exemple: utiliser la variante outline du bouton shadcn/ui */
+    @apply border border-primary bg-background text-primary hover:bg-accent hover:text-accent-foreground font-medium px-4 py-2 rounded-md transition-colors duration-200;
   }
 }
