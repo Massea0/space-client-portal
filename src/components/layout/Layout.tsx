@@ -1,6 +1,7 @@
-
+// src/components/layout/Layout.tsx
 import React from 'react';
-import { SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
+// MODIFIÉ ICI: Importer 'Sidebar' comme un export nommé et l'utiliser comme fournisseur.
+import { Sidebar } from '@/components/ui/sidebar';
 import AppSidebar from './Sidebar';
 import Header from './Header';
 
@@ -10,19 +11,20 @@ interface LayoutProps {
 
 const Layout: React.FC<LayoutProps> = ({ children }) => {
   return (
-    <SidebarProvider>
-      <div className="min-h-screen flex w-full bg-slate-50">
-        <AppSidebar />
-        <div className="flex-1 flex flex-col">
-          <Header />
-          <main className="flex-1 p-6">
-            <div className="max-w-7xl mx-auto">
-              {children}
-            </div>
-          </main>
+      // MODIFIÉ ICI: Utiliser <Sidebar> au lieu de <SidebarProvider>
+      <Sidebar>
+        <div className="min-h-screen flex w-full bg-background text-foreground"> {/* Utilisation des variables de thème Tailwind */}
+          <AppSidebar />
+          <div className="flex-1 flex flex-col">
+            <Header />
+            <main className="flex-1 p-4 sm:p-6 md:p-8 bg-background"> {/* Utilisation des variables de thème et padding ajusté */}
+              <div className="max-w-full sm:max-w-7xl mx-auto"> {/* max-w-full pour mobile, 7xl pour plus grand */}
+                {children}
+              </div>
+            </main>
+          </div>
         </div>
-      </div>
-    </SidebarProvider>
+      </Sidebar>
   );
 };
 

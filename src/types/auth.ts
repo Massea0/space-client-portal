@@ -9,6 +9,9 @@ export interface User {
   companyId?: string;
   companyName?: string;
   phone?: string;
+  createdAt?: Date; // Gardé optionnel car il est parfois setté après coup
+  isActive: boolean;
+  deletedAt?: Date | null; // AJOUTÉ: Date de suppression logique
 }
 
 export interface LoginCredentials {
@@ -19,7 +22,7 @@ export interface LoginCredentials {
 export interface AuthContextType {
   user: User | null;
   login: (credentials: LoginCredentials) => Promise<void>;
-  logout: () => Promise<void>; // Changed from () => void to () => Promise<void> as logout is async
+  logout: () => Promise<void>;
   isLoading: boolean;
-  error: string; // Added this line
+  error: string;
 }

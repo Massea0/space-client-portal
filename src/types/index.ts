@@ -1,3 +1,7 @@
+// src/types/index.ts
+
+// Réexporter le type User depuis auth.ts
+export type { User } from './auth'; // AJOUTÉ
 
 export interface Company {
   id: string;
@@ -31,25 +35,29 @@ export interface DevisItem {
   total: number;
 }
 
-export interface Invoice {
-  id: string;
-  number: string;
-  companyId: string;
-  companyName: string;
-  amount: number;
-  status: 'pending' | 'paid' | 'overdue';
-  createdAt: Date;
-  dueDate: Date;
-  items: InvoiceItem[];
-  paidAt?: Date;
-}
-
 export interface InvoiceItem {
   id: string;
   description: string;
   quantity: number;
   unitPrice: number;
   total: number;
+}
+
+// Statuts des tickets mis à jour pour correspondre à la base de données
+export type TicketStatus =
+    | 'open'
+    | 'in_progress'
+    | 'resolved'
+    | 'closed'
+    | 'pending_admin_response'
+    | 'pending_client_response';
+
+// NOUVEAU: Interface pour les catégories de tickets
+export interface TicketCategory {
+  id: string;
+  name: string;
+  description?: string;
+  createdAt: Date; // Ajouté pour la cohérence
 }
 
 export interface Ticket {
@@ -59,13 +67,15 @@ export interface Ticket {
   companyName: string;
   subject: string;
   description: string;
-  status: 'open' | 'in_progress' | 'resolved' | 'closed';
+  status: TicketStatus;
   priority: 'low' | 'medium' | 'high' | 'urgent';
+  categoryId?: string; // ID de la catégorie (optionnel pour l'instant)
+  categoryName?: string; // Nom de la catégorie (pour affichage, via jointure)
   createdAt: Date;
   updatedAt: Date;
   assignedTo?: string;
   messages: TicketMessage[];
-  attachments: TicketAttachment[];
+  attachments: TicketAttachment[]; // Gardé pour une future utilisation
 }
 
 export interface TicketMessage {
@@ -76,7 +86,7 @@ export interface TicketMessage {
   authorRole: 'client' | 'admin';
   content: string;
   createdAt: Date;
-  attachments: TicketAttachment[];
+  attachments: TicketAttachment[]; // Gardé pour une future utilisation
 }
 
 export interface TicketAttachment {
@@ -85,4 +95,20 @@ export interface TicketAttachment {
   url: string;
   size: number;
   type: string;
+}
+
+export type InvoiceStatus = 'pending' | 'paid' | 'overdue' | 'draft' | 'cancelled';
+
+export interface Invoice {
+  id: string;
+  number: string;
+  companyId: string;
+  companyName: string;
+  amount: number;
+  status: InvoiceStatus;
+  createdAt: Date;
+  dueDate: Date;
+  paidAt?: Date;
+  items: InvoiceItem[];
+  notes?: string;
 }

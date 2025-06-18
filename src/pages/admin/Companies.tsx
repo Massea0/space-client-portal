@@ -1,5 +1,6 @@
 // src/pages/admin/Companies.tsx
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom'; // Importer useNavigate
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -19,9 +20,10 @@ import { formatDate } from '@/lib/utils';
 import { useToast } from '@/hooks/useToast';
 import { companiesApi } from '@/services/api';
 import { Company } from '@/types';
-import { Plus, Search, Building, Mail, Phone, MapPin, Edit, Users, Trash2 } from 'lucide-react';
+import { Plus, Search, Building, Mail, Phone, MapPin, Edit, Users as UsersIcon, Trash2 } from 'lucide-react'; // Renommé Users en UsersIcon
 
 const Companies = () => {
+  const navigate = useNavigate(); // Initialiser useNavigate
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState('');
   const [showNewCompanyDialog, setShowNewCompanyDialog] = useState(false);
@@ -40,10 +42,8 @@ const Companies = () => {
   const loadCompanies = async () => {
     try {
       setLoading(true);
-      console.log("Chargement des entreprises...");
       const data = await companiesApi.getAll();
       setCompanies(data);
-      console.log("Entreprises chargées.");
     } catch (error) {
       console.error("Erreur lors du chargement des entreprises:", error);
       toast({
@@ -70,32 +70,24 @@ const Companies = () => {
       toast({ title: "Validation", description: "Le nom et l'email sont requis.", variant: "warning"});
       return;
     }
-
     try {
       setActionLoading('create');
-      console.log("Début de la création de l'entreprise (handleCreateCompany)...", newCompany);
       await companiesApi.create(newCompany);
-      console.log("Entreprise créée avec succès (API), rechargement de la liste...");
       await loadCompanies();
-      console.log("Liste des entreprises rechargée après création.");
-
       setNewCompany({ name: '', email: '', phone: '', address: '' });
       setShowNewCompanyDialog(false);
-
       toast({
         title: 'Succès',
         description: 'Entreprise créée avec succès',
         variant: 'success'
       });
     } catch (error) {
-      console.error("Erreur catchée dans handleCreateCompany:", error);
       toast({
         title: 'Erreur',
         description: (error as Error)?.message || 'Impossible de créer l\'entreprise',
         variant: 'error'
       });
     } finally {
-      console.log("Finally dans handleCreateCompany, réinitialisation de actionLoading.");
       setActionLoading(null);
     }
   };
@@ -105,35 +97,28 @@ const Companies = () => {
       toast({ title: "Validation", description: "Le nom et l'email sont requis.", variant: "warning"});
       return;
     }
-
     try {
       setActionLoading(`edit-${editingCompany.id}`);
-      console.log("Début de la modification de l'entreprise (handleEditCompany)...", editingCompany);
       await companiesApi.update(editingCompany.id, {
         name: editingCompany.name,
         email: editingCompany.email,
         phone: editingCompany.phone,
         address: editingCompany.address
       });
-      console.log("Entreprise modifiée avec succès (API), rechargement de la liste...");
       await loadCompanies();
-      console.log("Liste des entreprises rechargée après modification.");
       setEditingCompany(null);
-
       toast({
         title: 'Succès',
         description: 'Entreprise modifiée avec succès',
         variant: 'success'
       });
     } catch (error) {
-      console.error("Erreur catchée dans handleEditCompany:", error);
       toast({
         title: 'Erreur',
         description: (error as Error)?.message || 'Impossible de modifier l\'entreprise',
         variant: 'error'
       });
     } finally {
-      console.log("Finally dans handleEditCompany, réinitialisation de actionLoading.");
       setActionLoading(null);
     }
   };
@@ -141,30 +126,29 @@ const Companies = () => {
   const handleDeleteCompany = async (id: string) => {
     try {
       setActionLoading(`delete-${id}`);
-      console.log(`Début de la suppression de l'entreprise ${id} (handleDeleteCompany)...`);
       await companiesApi.delete(id);
-      console.log(`Entreprise ${id} supprimée avec succès (API), rechargement de la liste...`);
       await loadCompanies();
-      console.log("Liste des entreprises rechargée après suppression.");
       toast({
         title: 'Succès',
         description: 'Entreprise supprimée avec succès',
         variant: 'success'
       });
     } catch (error) {
-      console.error(`Erreur catchée dans handleDeleteCompany pour l'ID ${id}:`, error);
       toast({
         title: 'Erreur',
         description: (error as Error)?.message || 'Impossible de supprimer l\'entreprise. Elle est peut-être encore liée à des données.',
         variant: 'error'
       });
     } finally {
-      console.log(`Finally dans handleDeleteCompany pour l'ID ${id}, réinitialisation de actionLoading et companyToDelete.`);
       setActionLoading(null);
       setCompanyToDelete(null);
     }
   };
 
+  // NOUVELLE FONCTION pour gérer la navigation
+  const handleManageUsers = (companyId: string) => {
+    navigate(`/admin/users?companyId=${companyId}`);
+  };
 
   if (loading) {
     return (
@@ -286,7 +270,7 @@ const Companies = () => {
                       <div>
                         <CardTitle className="text-lg">{company.name}</CardTitle>
                         <p className="text-sm text-slate-600">
-                          Client depuis {formatDate(company.createdAt)}
+                          Client depuis {formatDate(new Date(company.createdAt))}
                         </p>
                       </div>
                     </div>
@@ -421,8 +405,14 @@ const Companies = () => {
                   )}
 
                   <div className="pt-3 border-t border-slate-200">
-                    <Button variant="outline" size="sm" className="w-full flex items-center gap-2">
-                      <Users className="h-4 w-4" />
+                    {/* MISE À JOUR DU BOUTON */}
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full flex items-center gap-2"
+                        onClick={() => handleManageUsers(company.id)} // Ajout du onClick
+                    >
+                      <UsersIcon className="h-4 w-4" /> {/* Utilisation de UsersIcon */}
                       Gérer les utilisateurs
                     </Button>
                   </div>

@@ -69,29 +69,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     const lastSuccessfullyFetchedUserIdRef = useRef<string | null>(null);
     const activeSupabaseSessionRef = useRef<Session | null | undefined>(undefined);
 
-    const fetchCompanyName = async (
-        companyId: string
-    ): Promise<string | undefined> => {
-        if (!companyId) {
-            console.warn('[AuthContext] fetchCompanyName: No companyId provided.');
-            return undefined;
-        }
-        try {
-            // Ensure the passed function is async to return a Promise
-            const { data, error: companyError } = await supabaseRequestWithTimeout<{ name: string }>(
-                async () => supabase.from('companies').select('name').eq('id', companyId).single()
-            );
-            if (companyError) {
-                console.error('[AuthContext] fetchCompanyName: Error:', companyError.message);
-                return undefined;
-            }
-            return data?.name;
-        } catch (e) {
-            console.error('[AuthContext] fetchCompanyName: Exception:', e);
-            return undefined;
-        }
-    };
-
     const fetchFullUserProfile = async (
         sessionUser: Session['user']
     ): Promise<User | null> => {
@@ -104,22 +81,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
                 role: 'client' | 'admin';
                 company_id?: string;
                 phone?: string;
+                created_at: string;
+                is_active: boolean;
+                deleted_at?: string | null; // MODIFIÉ: Ajout de deleted_at
+                companies?: { name: string } | null;
             };
-            // Ensure the passed function is async to return a Promise
             const { data: userProfile, error: profileError } =
                 await supabaseRequestWithTimeout<UserProfileDb>(async () =>
-                    supabase.from('users').select('*').eq('id', sessionUser.id).single()
+                    supabase.from('users').select('*, companies(name)').eq('id', sessionUser.id).single()
                 );
 
             if (profileError) {
-                console.error('[AuthContext] fetchFullUserProfile: Error:', profileError.message);
+                console.error('[AuthContext] fetchFullUserProfile: Error fetching profile:', profileError.message);
                 return null;
             }
             if (userProfile) {
-                let companyName: string | undefined = undefined;
-                if (userProfile.company_id) {
-                    companyName = await fetchCompanyName(userProfile.company_id);
-                }
+                const companyName = userProfile.companies?.name;
                 return {
                     id: sessionUser.id,
                     email: userProfile.email || sessionUser.email || '',
@@ -129,6 +106,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
                     companyId: userProfile.company_id,
                     phone: userProfile.phone,
                     companyName: companyName,
+                    createdAt: new Date(userProfile.created_at),
+                    isActive: userProfile.is_active,
+                    deletedAt: userProfile.deleted_at ? new Date(userProfile.deleted_at) : null, // MODIFIÉ: Mapper deleted_at
                 };
             }
             console.warn('[AuthContext] fetchFullUserProfile: Profile not found for ID:', sessionUser.id);
@@ -151,7 +131,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
                 console.log(
                     '[AuthContext] onAuthStateChange. Event:', event,
                     'Session User ID:', currentSupabaseSession?.user?.id,
-                    'Local User State ID (at listener setup):', user?.id, // This `user` is from the closure
+                    'Local User State ID (at listener setup):', user?.id,
                     'Last Fetched ID (ref):', lastSuccessfullyFetchedUserIdRef.current
                 );
 
@@ -185,9 +165,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
                         setIsLoading(true);
                         try {
                             const fetchedUser = await fetchFullUserProfile(currentSupabaseSession.user);
-                            setUser(fetchedUser);
-                            if (fetchedUser) {
-                                lastSuccessfullyFetchedUserIdRef.current = supabaseUserId;
+                            // MODIFIÉ ICI: Vérifier isActive ET deletedAt
+                            if (fetchedUser && (!fetchedUser.isActive || fetchedUser.deletedAt)) {
+                                const reason = fetchedUser.deletedAt ? "dans la corbeille" : "inactif";
+                                console.warn(`[AuthContext] User ${supabaseUserId} is ${reason}. Forcing sign out.`);
+                                await supabase.auth.signOut();
+                                setUser(null);
+                                lastSuccessfullyFetchedUserIdRef.current = null;
+                                setError(fetchedUser.deletedAt ? 'Votre compte a été supprimé.' : 'Votre compte a été désactivé. Veuillez contacter l\'administrateur.');
+                            } else {
+                                setUser(fetchedUser);
+                                if (fetchedUser) {
+                                    lastSuccessfullyFetchedUserIdRef.current = supabaseUserId;
+                                }
+                                setError(''); // Clear any previous error on successful fetch
                             }
                         } catch (e) {
                             console.error(`[AuthContext] Profile fetch exception for ${supabaseUserId}:`, e);
@@ -213,6 +204,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
                         setIsLoading(false);
                         lastSuccessfullyFetchedUserIdRef.current = null;
                     }
+                    else if (isLoading && !session) {
+                        setIsLoading(false);
+                    }
                 } catch (e) {
                     console.error('[AuthContext] initializeSession: Exception:', e);
                     if (isLoading) setIsLoading(false);
@@ -228,12 +222,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
             }
         }, 500);
 
+
         return () => {
             console.log('[AuthContext] Unsubscribing from onAuthStateChange.');
             authListener?.subscription.unsubscribe();
             clearTimeout(initTimer);
         };
-    }, []); // Dependency array is intentionally empty for one-time listener setup
+    }, []); // user retiré des dépendances pour éviter boucle de re-fetch
 
     const login = async (credentials: LoginCredentials): Promise<void> => {
         setIsLoading(true);
@@ -250,24 +245,55 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
                 setIsLoading(false);
                 throw signInError;
             }
+
+            if (signInData.user) {
+                const fetchedUser = await fetchFullUserProfile(signInData.user);
+
+                // MODIFIÉ ICI: Vérifier isActive ET deletedAt
+                if (fetchedUser && (!fetchedUser.isActive || fetchedUser.deletedAt)) {
+                    await supabase.auth.signOut();
+                    const inactiveErrorMsg = fetchedUser.deletedAt ? 'Votre compte a été supprimé.' : 'Votre compte a été désactivé. Veuillez contacter l\'administrateur.';
+                    setError(inactiveErrorMsg);
+                    setUser(null);
+                    lastSuccessfullyFetchedUserIdRef.current = null;
+                    setIsLoading(false);
+                    throw new Error(inactiveErrorMsg);
+                }
+                // Si l'utilisateur est actif et non supprimé, onAuthStateChange s'occupera de le setter.
+                // Et on efface l'erreur locale si tout va bien.
+                setError('');
+            } else {
+                throw new Error("Authentification réussie mais pas d'objet utilisateur retourné.");
+            }
             console.log('[AuthContext] login: Sign-in initiated. User ID:', signInData.user?.id);
+            // setIsLoading(false) est géré par onAuthStateChange
         } catch (err) {
-            let errorMessage = 'An unexpected error occurred during login.';
+            let errorMessage = 'Une erreur inattendue est survenue lors de la connexion.';
             if (err instanceof AuthError) {
                 errorMessage = err.message;
             } else if (err instanceof Error) {
                 errorMessage = err.message;
             }
 
-            if (errorMessage.toLowerCase() !== 'invalid login credentials') {
-                setError(errorMessage);
+            const specificErrors = [
+                'Votre compte a été désactivé. Veuillez contacter l\'administrateur.',
+                'Votre compte a été supprimé.'
+            ];
+
+            if (!(err instanceof Error && specificErrors.includes(err.message))) {
+                if (errorMessage.toLowerCase().includes('invalid login credentials')) {
+                    setError('Email ou mot de passe incorrect.');
+                } else {
+                    setError(errorMessage);
+                }
             } else {
-                setError('Email ou mot de passe incorrect');
+                setError(errorMessage);
             }
+
             setUser(null);
             lastSuccessfullyFetchedUserIdRef.current = null;
-            if(isLoading) setIsLoading(false);
-            throw err;
+            if(isLoading) setIsLoading(false); // S'assurer que isLoading est false en cas d'erreur précoce
+            throw err; // Rethrow pour que le composant LoginForm puisse aussi le catcher si besoin
         }
     };
 

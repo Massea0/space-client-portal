@@ -1,174 +1,129 @@
 // src/pages/Devis.tsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Textarea } from '@/components/ui/textarea';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/hooks/useToast';
 import { devisApi } from '@/services/api';
-import { Devis, DevisItem } from '@/types'; // Correction: Ajout de DevisItem ici
-import { Download, Search, Filter, CheckCircle, XCircle, Plus } from 'lucide-react';
-import DevisForm from '@/components/forms/DevisForm';
+import { Devis as DevisType } from '@/types'; // Renommé pour éviter conflit avec le nom du composant
+import { Download, Search, Filter, CheckCircle, XCircle, AlertTriangle, Clock } from 'lucide-react';
 import { downloadDevisPdf } from '@/lib/pdfGenerator';
 
-const DevisPage = () => {
+const DevisPage = () => { // Renommé pour éviter confusion avec DevisType
   const { user } = useAuth();
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [rejectionReason, setRejectionReason] = useState('');
-  const [selectedDevis, setSelectedDevis] = useState<Devis | null>(null);
-  const [devisList, setDevisList] = useState<Devis[]>([]);
+  const [devisList, setDevisList] = useState<DevisType[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
-  const [showNewDevisDialog, setShowNewDevisDialog] = useState(false);
 
-  const loadDevis = async () => {
-    try {
-      setLoading(true);
-      const data = user?.role === 'admin'
-          ? await devisApi.getAll()
-          : await devisApi.getByCompany(user?.companyId || '');
-      setDevisList(data);
-    } catch (error) {
-      toast({
-        title: 'Erreur',
-        description: 'Impossible de charger les devis',
-        variant: 'error'
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    if (user) {
-      loadDevis();
-    }
-  }, [user]);
-
-  const filteredDevis = devisList.filter(devis => {
-    const companyName = devis.companyName || '';
-    const matchesSearch = devis.number.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        devis.object.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        companyName.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = statusFilter === 'all' || devis.status === statusFilter;
-    return matchesSearch && matchesStatus;
-  });
-
-  const getStatusBadge = (status: Devis['status']) => {
-    const variants: { [key in Devis['status']]: string } = {
-      draft: 'bg-gray-100 text-gray-800',
+  const getStatusBadge = (status: DevisType['status']) => {
+    const variants: { [key in DevisType['status']]: string } = {
+      draft: 'bg-slate-100 text-slate-800',
       sent: 'bg-blue-100 text-blue-800',
       pending: 'bg-yellow-100 text-yellow-800',
       approved: 'bg-green-100 text-green-800',
       rejected: 'bg-red-100 text-red-800',
-      expired: 'bg-orange-100 text-orange-800'
+      expired: 'bg-orange-100 text-orange-800',
     };
-
-    const labels: { [key in Devis['status']]: string } = {
+    const labels: { [key in DevisType['status']]: string } = {
       draft: 'Brouillon',
       sent: 'Envoyé',
       pending: 'En attente',
       approved: 'Approuvé',
       rejected: 'Rejeté',
-      expired: 'Expiré'
+      expired: 'Expiré',
     };
+    const icons: { [key in DevisType['status']]: React.ElementType } = {
+      draft: Clock,
+      sent: Filter, // Placeholder, choose appropriate icon
+      pending: Clock,
+      approved: CheckCircle,
+      rejected: XCircle,
+      expired: AlertTriangle,
+    };
+    const Icon = icons[status] || Filter;
 
     return (
-        <Badge className={variants[status] || 'bg-slate-100 text-slate-800'}>
+        <Badge className={`${variants[status] || 'bg-gray-100 text-gray-800'} flex items-center gap-1.5`}>
+          <Icon className="h-3.5 w-3.5" />
           {labels[status] || status}
         </Badge>
     );
   };
 
-  const handleApprove = async (devisId: string) => {
+  const loadDevis = useCallback(async () => {
+    setLoading(true);
     try {
-      setActionLoading(devisId);
-      await devisApi.updateStatus(devisId, 'approved');
-      await loadDevis();
-      toast({
-        title: 'Succès',
-        description: 'Devis approuvé avec succès',
-        variant: 'success'
-      });
+      if (user?.role === 'client' && !user.companyId) {
+        toast({
+          title: 'Erreur',
+          description: 'Information de compagnie manquante pour charger les devis.',
+          variant: 'error'
+        });
+        setDevisList([]);
+        return;
+      }
+      // Pour la page client, on ne charge que les devis de sa compagnie
+      // et on ne montre pas les 'draft'
+      const data = await devisApi.getByCompany(user?.companyId || '');
+      setDevisList(data.filter(d => d.status !== 'draft'));
     } catch (error) {
       toast({
         title: 'Erreur',
-        description: 'Impossible d\'approuver le devis',
+        description: 'Impossible de charger les devis.',
         variant: 'error'
       });
     } finally {
-      setActionLoading(null);
+      setLoading(false);
     }
-  };
+  }, [user, toast]);
 
-  const handleReject = async (devisId: string, reason: string) => {
-    if (!reason.trim()) {
-      toast({
-        title: 'Validation',
-        description: 'La raison du rejet est obligatoire.',
-        variant: 'warning'
-      });
-      return;
+  useEffect(() => {
+    if (user) {
+      loadDevis();
     }
+  }, [user, loadDevis]);
+
+  const filteredDevis = devisList.filter(devis => {
+    // Le client ne recherche pas par nom de compagnie car il ne voit que les siens
+    const matchesSearch = devis.number.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        devis.object.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesStatus = statusFilter === 'all' || devis.status === statusFilter;
+    return matchesSearch && matchesStatus;
+  });
+
+  const handleDevisAction = async (devisId: string, newStatus: 'approved' | 'rejected') => {
+    setActionLoading(`${devisId}-${newStatus}`);
     try {
-      setActionLoading(devisId);
-      await devisApi.updateStatus(devisId, 'rejected', reason);
-      await loadDevis();
-      setRejectionReason('');
-      setSelectedDevis(null);
+      await devisApi.updateStatus(devisId, newStatus);
       toast({
         title: 'Succès',
-        description: 'Devis rejeté',
-        variant: 'success'
-      });
-    } catch (error) {
-      toast({
-        title: 'Erreur',
-        description: 'Impossible de rejeter le devis',
-        variant: 'error'
-      });
-    } finally {
-      setActionLoading(null);
-    }
-  };
-
-  const handleCreateDevis = async (devisData: Omit<Devis, 'id' | 'number' | 'createdAt' | 'companyName'> & { items: Omit<DevisItem, 'id' | 'total'>[] }) => {
-    try {
-      setActionLoading('create');
-      await devisApi.create(devisData);
-      await loadDevis();
-      setShowNewDevisDialog(false);
-      toast({
-        title: 'Succès',
-        description: 'Devis créé avec succès',
-        variant: 'success'
-      });
-    } catch (error) {
-      toast({
-        title: 'Erreur',
-        description: (error as Error)?.message || 'Impossible de créer le devis',
-        variant: 'error'
-      });
-    } finally {
-      setActionLoading(null);
-    }
-  };
-
-  const handleDownloadPdf = async (devis: Devis) => {
-    try {
-      await downloadDevisPdf(devis);
-      toast({
-        title: 'Téléchargement PDF',
-        description: `Le PDF pour le devis ${devis.number} est en cours de préparation.`,
+        description: `Le devis a été ${newStatus === 'approved' ? 'approuvé' : 'rejeté'}.`,
         variant: 'success',
       });
+      loadDevis(); // Recharger la liste
+    } catch (error) {
+      console.error("Erreur lors de la mise à jour du statut du devis:", error);
+      toast({
+        title: 'Erreur',
+        description: 'Impossible de mettre à jour le statut du devis.',
+        variant: 'error',
+      });
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleDownloadPdf = async (devis: DevisType) => {
+    setActionLoading(`pdf-${devis.id}`);
+    try {
+      await downloadDevisPdf(devis);
     } catch (error) {
       console.error("Error generating Devis PDF:", error);
       toast({
@@ -176,9 +131,10 @@ const DevisPage = () => {
         description: 'Impossible de générer le PDF pour le devis.',
         variant: 'error'
       });
+    } finally {
+      setActionLoading(null);
     }
   };
-
 
   if (loading) {
     return (
@@ -195,34 +151,11 @@ const DevisPage = () => {
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-slate-900">
-              {user?.role === 'admin' ? 'Tous les Devis' : 'Mes Devis'}
-            </h1>
-            <p className="text-slate-600 mt-1">
-              Consultez et gérez vos devis
-            </p>
+            <h1 className="text-3xl font-bold text-slate-900">Mes Devis</h1>
+            <p className="text-slate-600 mt-1">Consultez et gérez vos devis</p>
           </div>
-
-          {user?.role === 'admin' && (
-              <Dialog open={showNewDevisDialog} onOpenChange={setShowNewDevisDialog}>
-                <DialogTrigger asChild>
-                  <Button className="flex items-center gap-2">
-                    <Plus className="h-4 w-4" />
-                    Nouveau Devis
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
-                  <DevisForm
-                      onSubmit={handleCreateDevis}
-                      onCancel={() => setShowNewDevisDialog(false)}
-                      isLoading={actionLoading === 'create'}
-                  />
-                </DialogContent>
-              </Dialog>
-          )}
         </div>
 
-        {/* Filters */}
         <Card>
           <CardContent className="p-4">
             <div className="flex flex-col md:flex-row gap-4">
@@ -230,7 +163,7 @@ const DevisPage = () => {
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 h-4 w-4" />
                   <Input
-                      placeholder="Rechercher par numéro, objet ou entreprise..."
+                      placeholder="Rechercher par N° ou objet..."
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
                       className="pl-10"
@@ -245,7 +178,7 @@ const DevisPage = () => {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">Tous les statuts</SelectItem>
-                    <SelectItem value="draft">Brouillon</SelectItem>
+                    {/* Le client ne voit pas les 'draft' */}
                     <SelectItem value="sent">Envoyé</SelectItem>
                     <SelectItem value="pending">En attente</SelectItem>
                     <SelectItem value="approved">Approuvé</SelectItem>
@@ -258,136 +191,81 @@ const DevisPage = () => {
           </CardContent>
         </Card>
 
-        {/* Devis List */}
         <div className="grid gap-4">
           {filteredDevis.map((devis) => (
               <Card key={devis.id} className="hover:shadow-md transition-shadow">
                 <CardContent className="p-6">
-                  <div className="flex flex-col md:flex-row items-start justify-between">
-                    <div className="space-y-2 flex-1 mb-4 md:mb-0">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                    <div className="space-y-2 flex-grow">
                       <div className="flex items-center gap-4">
                         <h3 className="font-semibold text-lg text-slate-900">
                           Devis #{devis.number}
                         </h3>
                         {getStatusBadge(devis.status)}
                       </div>
-                      <h4 className="text-slate-700 font-medium">{devis.object}</h4>
-                      {user?.role === 'admin' && (
-                          <p className="text-slate-600 text-sm">
-                            <strong>Entreprise:</strong> {devis.companyName}
-                          </p>
-                      )}
-                      <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-6 text-sm text-slate-600">
-                        <span>Créé le {formatDate(new Date(devis.createdAt))}</span>
-                        <span>Valide jusqu'au {formatDate(new Date(devis.validUntil))}</span>
+                      <p className="text-sm text-slate-600">
+                        <strong>Objet:</strong> {devis.object}
+                      </p>
+                      <div className="flex flex-col md:flex-row md:items-center gap-x-6 gap-y-1 text-sm text-slate-600">
+                        <span>Créé le {formatDate(devis.createdAt)}</span>
+                        <span>Valide jusqu'au {formatDate(devis.validUntil)}</span>
                       </div>
-                      {devis.rejectionReason && (
-                          <div className="bg-red-50 border border-red-200 rounded-md p-2 mt-2 text-sm">
-                            <p className="text-red-800">
-                              <strong>Raison du rejet:</strong> {devis.rejectionReason}
-                            </p>
-                          </div>
-                      )}
                     </div>
-                    <div className="text-left md:text-right space-y-2 w-full md:w-auto">
+                    <div className="text-right space-y-2 mt-4 sm:mt-0 flex-shrink-0">
                       <div className="text-2xl font-bold text-slate-900">
                         {formatCurrency(devis.amount)}
                       </div>
-                      <div className="flex flex-col sm:flex-row sm:justify-end gap-2">
+                      <div className="flex flex-col items-end gap-2">
                         <Button
                             variant="outline"
                             size="sm"
                             onClick={() => handleDownloadPdf(devis)}
-                            className="flex items-center gap-2"
+                            disabled={actionLoading === `pdf-${devis.id}`}
+                            className="flex items-center gap-2 w-full sm:w-auto"
                         >
                           <Download className="h-4 w-4" />
                           Télécharger PDF
                         </Button>
-
-                        {devis.status === 'pending' && user?.role !== 'admin' && (
-                            <div className="flex gap-2">
+                        {/* Actions client : Approuver ou Rejeter */}
+                        {(devis.status === 'sent' || devis.status === 'pending') && (
+                            <div className="flex gap-2 w-full sm:w-auto">
                               <Button
                                   size="sm"
-                                  onClick={() => handleApprove(devis.id)}
-                                  disabled={actionLoading === devis.id}
-                                  className="flex items-center gap-2 bg-green-600 hover:bg-green-700"
+                                  variant="default"
+                                  onClick={() => handleDevisAction(devis.id, 'approved')}
+                                  disabled={actionLoading === `${devis.id}-approved`}
+                                  className="flex-1 flex items-center gap-1.5"
                               >
-                                <CheckCircle className="h-4 w-4" />
-                                {actionLoading === devis.id ? 'En cours...' : 'Approuver'}
+                                <CheckCircle className="h-4 w-4" /> Approuver
                               </Button>
-
-                              <Dialog open={selectedDevis?.id === devis.id} onOpenChange={(isOpen) => !isOpen && setSelectedDevis(null)}>
-                                <DialogTrigger asChild>
-                                  <Button
-                                      size="sm"
-                                      variant="destructive"
-                                      onClick={() => {
-                                        setSelectedDevis(devis);
-                                        setRejectionReason('');
-                                      }}
-                                      className="flex items-center gap-2"
-                                      disabled={actionLoading === devis.id}
-                                  >
-                                    <XCircle className="h-4 w-4" />
-                                    Rejeter
-                                  </Button>
-                                </DialogTrigger>
-                                <DialogContent>
-                                  <DialogHeader>
-                                    <DialogTitle>Rejeter le devis #{devis.number}</DialogTitle>
-                                  </DialogHeader>
-                                  <div className="space-y-4">
-                                    <p className="text-slate-600">
-                                      Veuillez indiquer la raison du rejet de ce devis :
-                                    </p>
-                                    <Textarea
-                                        placeholder="Raison du rejet..."
-                                        value={rejectionReason}
-                                        onChange={(e) => setRejectionReason(e.target.value)}
-                                    />
-                                    <div className="flex gap-2 justify-end">
-                                      <Button variant="outline" onClick={() => setSelectedDevis(null)}>
-                                        Annuler
-                                      </Button>
-                                      <Button
-                                          variant="destructive"
-                                          onClick={() => handleReject(devis.id, rejectionReason)}
-                                          disabled={!rejectionReason.trim() || actionLoading === devis.id}
-                                      >
-                                        {actionLoading === devis.id ? 'En cours...' : 'Confirmer le rejet'}
-                                      </Button>
-                                    </div>
-                                  </div>
-                                </DialogContent>
-                              </Dialog>
+                              <Button
+                                  size="sm"
+                                  variant="destructive"
+                                  onClick={() => handleDevisAction(devis.id, 'rejected')}
+                                  disabled={actionLoading === `${devis.id}-rejected`}
+                                  className="flex-1 flex items-center gap-1.5"
+                              >
+                                <XCircle className="h-4 w-4" /> Rejeter
+                              </Button>
                             </div>
                         )}
                       </div>
                     </div>
                   </div>
 
-                  {/* Devis Items Preview */}
-                  <div className="mt-4 pt-4 border-t border-slate-200">
-                    <h4 className="font-medium text-slate-900 mb-2">Prestations:</h4>
-                    <div className="space-y-1">
-                      {devis.items.slice(0, 2).map((item) => (
-                          <div key={item.id} className="flex justify-between text-sm text-slate-600">
-                            <span>{item.description} (x{item.quantity})</span>
-                            <span>{formatCurrency(item.total)}</span>
-                          </div>
-                      ))}
-                      {devis.items.length > 2 && (
-                          <div className="text-sm text-slate-500">
-                            ... et {devis.items.length - 2} autre(s) prestation(s)
-                          </div>
-                      )}
-                    </div>
-                    {devis.notes && (
-                        <div className="mt-2 text-sm text-slate-600">
-                          <strong>Notes:</strong> {devis.notes}
+                  {devis.items && devis.items.length > 0 && (
+                      <div className="mt-4 pt-4 border-t border-slate-200">
+                        <h4 className="font-medium text-slate-900 mb-2">Détails des articles:</h4>
+                        <div className="space-y-1 max-h-32 overflow-y-auto">
+                          {devis.items.map((item) => (
+                              <div key={item.id} className="flex justify-between text-sm text-slate-600 hover:bg-slate-50 p-1 rounded">
+                                <span className="truncate pr-2" title={item.description}>{item.description} (x{item.quantity})</span>
+                                <span className="whitespace-nowrap">{formatCurrency(item.total)}</span>
+                              </div>
+                          ))}
                         </div>
-                    )}
-                  </div>
+                      </div>
+                  )}
                 </CardContent>
               </Card>
           ))}
@@ -396,7 +274,7 @@ const DevisPage = () => {
         {filteredDevis.length === 0 && !loading && (
             <Card>
               <CardContent className="p-8 text-center">
-                <p className="text-slate-500">Aucun devis trouvé</p>
+                <p className="text-slate-500">Aucun devis trouvé.</p>
               </CardContent>
             </Card>
         )}

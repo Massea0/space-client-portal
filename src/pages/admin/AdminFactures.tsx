@@ -1,40 +1,60 @@
 // src/pages/admin/AdminFactures.tsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom'; // useLocation AJOUTÉ
+import { invoicesApi } from '@/services/api';
+import { Invoice as InvoiceType, InvoiceItem } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogTrigger
+} from "@/components/ui/dialog";
 import { formatDate, formatCurrency } from '@/lib/utils';
 import { useToast } from '@/hooks/useToast';
-import { invoicesApi } from '@/services/api';
-import { Invoice, InvoiceItem } from '@/types'; // Assurez-vous que InvoiceItem est importé
-import { Search, CreditCard, Building, Calendar, Euro, Eye, Check, Plus, Download } from 'lucide-react';
-import InvoiceForm from '@/components/forms/InvoiceForm';
 import { downloadInvoicePdf } from '@/lib/pdfGenerator';
-
-// Type pour les données du formulaire de création de facture
-type NewInvoiceFormData = Omit<Invoice, 'id' | 'number' | 'createdAt' | 'companyName' | 'paidAt'> & {
-  items: Omit<InvoiceItem, 'id' | 'total'>[];
-};
+import {
+  Download, CheckCircle, XCircle, Search as SearchIcon, Plus, Filter, Eye,
+  CreditCard, Building, Calendar, Euro
+} from 'lucide-react';
+import FactureForm, { FactureFormSubmitData } from '@/components/forms/FactureForm';
 
 const AdminFactures = () => {
+  const navigate = useNavigate();
+  const location = useLocation(); // AJOUTÉ
   const { toast } = useToast();
-  const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [invoiceList, setInvoiceList] = useState<InvoiceType[]>([]);
+  const [filteredInvoices, setFilteredInvoices] = useState<InvoiceType[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
-  const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
-  const [showNewInvoiceDialog, setShowNewInvoiceDialog] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [selectedInvoice, setSelectedInvoice] = useState<InvoiceType | null>(null);
+
+  const [isCreateFactureDialogOpen, setIsCreateFactureDialogOpen] = useState(false);
+  const [isSubmittingFacture, setIsSubmittingFacture] = useState(false);
+
+  // AJOUTÉ: useEffect pour gérer l'ouverture du dialogue de création
+  useEffect(() => {
+    if (location.state?.openCreateFactureDialog) {
+      setIsCreateFactureDialogOpen(true);
+      // Nettoyer l'état de la navigation pour éviter la réouverture
+      navigate(location.pathname, { replace: true, state: {} });
+    }
+  }, [location.state, navigate, location.pathname]);
 
 
-  const loadInvoices = async () => {
+  const loadInvoices = useCallback(async () => {
     try {
       setLoading(true);
       const data = await invoicesApi.getAll();
-      setInvoices(data);
+      setInvoiceList(data);
     } catch (error) {
       toast({
         title: 'Erreur',
@@ -44,30 +64,34 @@ const AdminFactures = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [toast]);
 
   useEffect(() => {
     loadInvoices();
-  }, []);
+  }, [loadInvoices]);
 
-  const filteredInvoices = invoices.filter(invoice => {
-    const matchesSearch = invoice.number.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        invoice.companyName.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = statusFilter === 'all' || invoice.status === statusFilter;
-    return matchesSearch && matchesStatus;
-  });
+  useEffect(() => {
+    let result = invoiceList;
+    if (searchTerm) {
+      result = result.filter(invoice =>
+          invoice.number.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          (invoice.companyName || '').toLowerCase().includes(searchTerm.toLowerCase())
+      );
+    }
+    if (statusFilter !== 'all') {
+      result = result.filter(invoice => invoice.status === statusFilter);
+    }
+    setFilteredInvoices(result);
+  }, [searchTerm, statusFilter, invoiceList]);
 
   const handleMarkAsPaid = async (id: string) => {
     try {
       setActionLoading(id);
       const updatedInvoice = await invoicesApi.updateStatus(id, 'paid');
-      await loadInvoices(); // Recharger pour voir le statut mis à jour
-
-      // Mettre à jour selectedInvoice s'il est celui qui a été modifié
+      await loadInvoices();
       if (selectedInvoice && selectedInvoice.id === id) {
         setSelectedInvoice(updatedInvoice);
       }
-
       toast({
         title: 'Succès',
         description: 'Facture marquée comme payée',
@@ -84,31 +108,64 @@ const AdminFactures = () => {
     }
   };
 
-  const handleCreateInvoice = async (invoiceData: NewInvoiceFormData) => {
+  const handleCreateFactureSubmitInDialog = async (data: FactureFormSubmitData) => {
+    setIsSubmittingFacture(true);
     try {
-      setActionLoading('create');
-      await invoicesApi.create(invoiceData);
-      await loadInvoices();
-      setShowNewInvoiceDialog(false); // Fermer le dialogue après la création
+      console.log("[AdminFacturesPage_Dialog] Données du formulaire reçues:", data);
+
+      const issueDateObj = new Date(data.issueDate);
+      const dueDateObj = new Date(data.dueDate);
+
+      if (isNaN(issueDateObj.getTime()) || isNaN(dueDateObj.getTime())) {
+        toast({
+          title: 'Erreur de Validation',
+          description: 'Les dates fournies (émission ou échéance) sont invalides.',
+          variant: 'error',
+        });
+        setIsSubmittingFacture(false);
+        return;
+      }
+
+      const payloadForApi = {
+        companyId: data.companyId,
+        amount: data.items.reduce((sum, item) => sum + (Number(item.quantity) * Number(item.unitPrice)), 0),
+        status: 'pending' as InvoiceType['status'], // Ou 'draft' si vous préférez
+        dueDate: dueDateObj,
+        notes: data.notes,
+        items: data.items.map(item => ({
+          description: item.description,
+          quantity: Number(item.quantity),
+          unitPrice: Number(item.unitPrice),
+        })),
+      };
+
+      console.log("[AdminFacturesPage_Dialog] Payload envoyé à l'API:", payloadForApi);
+      const newFacture = await invoicesApi.create(payloadForApi);
+
       toast({
-        title: 'Succès',
-        description: 'Facture créée avec succès',
-        variant: 'success'
+        title: 'Facture Créée',
+        description: `La facture N°${newFacture.number} a été créée avec succès.`,
+        variant: 'success',
       });
-    } catch (error) {
-      console.error("Error creating invoice:", error);
+      setIsCreateFactureDialogOpen(false); // Fermer le dialogue
+      loadInvoices(); // Recharger la liste
+    } catch (error: unknown) {
+      console.error("[AdminFacturesPage_Dialog] Erreur lors de la création de la facture:", error);
+      let errorMessage = 'Une erreur est survenue lors de la création de la facture.';
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      }
       toast({
-        title: 'Erreur',
-        description: (error as Error)?.message || 'Impossible de créer la facture. Vérifiez les détails et réessayez.',
-        variant: 'error'
+        title: 'Erreur de Création',
+        description: errorMessage,
+        variant: 'error',
       });
     } finally {
-      setActionLoading(null);
+      setIsSubmittingFacture(false);
     }
   };
 
-
-  const getStatusBadge = (status: Invoice['status']) => {
+  const getStatusBadge = (status: InvoiceType['status']) => {
     switch (status) {
       case 'pending':
         return <Badge variant="secondary" className="bg-yellow-100 text-yellow-800">En attente</Badge>;
@@ -116,19 +173,18 @@ const AdminFactures = () => {
         return <Badge className="bg-green-100 text-green-800">Payée</Badge>;
       case 'overdue':
         return <Badge variant="destructive">En retard</Badge>;
+      case 'draft':
+        return <Badge variant="secondary" className="bg-slate-100 text-slate-800">Brouillon</Badge>;
+      case 'cancelled':
+        return <Badge variant="secondary" className="bg-gray-200 text-gray-700">Annulée</Badge>;
       default:
         return <Badge variant="secondary">{status}</Badge>;
     }
   };
 
-  const handleDownloadPdf = async (invoice: Invoice) => {
+  const handleDownloadPdf = async (invoice: InvoiceType) => {
     try {
       await downloadInvoicePdf(invoice);
-      toast({
-        title: 'Téléchargement PDF',
-        description: `Le PDF pour la facture ${invoice.number} est en cours de préparation.`,
-        variant: 'success',
-      });
     } catch (error) {
       console.error("Error generating Invoice PDF:", error);
       toast({
@@ -138,7 +194,6 @@ const AdminFactures = () => {
       });
     }
   };
-
 
   if (loading) {
     return (
@@ -151,62 +206,68 @@ const AdminFactures = () => {
     );
   }
 
+  const availableStatuses: InvoiceType['status'][] = ['pending', 'paid', 'overdue', 'draft', 'cancelled'];
+
+
   return (
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col md:flex-row items-center justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-slate-900">Toutes les Factures</h1>
-            <p className="text-slate-600 mt-1">
-              Gérez toutes les factures des clients
-            </p>
+            <h1 className="text-3xl font-bold text-slate-900">Gestion des Factures</h1>
+            <p className="text-slate-600 mt-1">Consultez et gérez toutes les factures clients.</p>
           </div>
-          {/* Bouton pour ouvrir le dialogue de création de facture */}
-          <Dialog open={showNewInvoiceDialog} onOpenChange={setShowNewInvoiceDialog}>
+          <Dialog open={isCreateFactureDialogOpen} onOpenChange={setIsCreateFactureDialogOpen}>
             <DialogTrigger asChild>
-              <Button className="flex items-center gap-2">
-                <Plus className="h-4 w-4" />
-                Nouvelle Facture
+              <Button className="flex items-center gap-2 w-full md:w-auto">
+                <Plus className="h-4 w-4" /> Nouvelle Facture
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto"> {/* Augmenter la largeur max */}
-              <InvoiceForm
-                  onSubmit={handleCreateInvoice}
-                  onCancel={() => setShowNewInvoiceDialog(false)}
-                  isLoading={actionLoading === 'create'}
+            <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>Créer une Nouvelle Facture</DialogTitle>
+                <DialogDescription>
+                  Remplissez les informations ci-dessous pour générer une nouvelle facture.
+                </DialogDescription>
+              </DialogHeader>
+              <FactureForm
+                  onSubmit={handleCreateFactureSubmitInDialog}
+                  onCancel={() => setIsCreateFactureDialogOpen(false)}
+                  isLoading={isSubmittingFacture}
               />
             </DialogContent>
           </Dialog>
         </div>
 
-        {/* Filters */}
         <Card>
-          <CardContent className="p-4">
-            <div className="flex gap-4">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 h-4 w-4" />
-                <Input
-                    placeholder="Rechercher par numéro ou entreprise..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-10"
-                />
-              </div>
+          <CardContent className="p-4 space-y-4 md:space-y-0 md:flex md:items-center md:justify-between md:gap-4">
+            <div className="relative w-full md:flex-1">
+              <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 h-4 w-4" />
+              <Input
+                  placeholder="Rechercher par N°, client..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10 w-full"
+              />
+            </div>
+            <div className="flex items-center gap-2 w-full md:w-auto">
+              <Filter className="h-4 w-4 text-slate-500 hidden md:inline-block" />
               <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-48">
+                <SelectTrigger className="w-full md:w-[200px]">
                   <SelectValue placeholder="Filtrer par statut" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Tous les statuts</SelectItem>
-                  <SelectItem value="pending">En attente</SelectItem>
-                  <SelectItem value="paid">Payée</SelectItem>
-                  <SelectItem value="overdue">En retard</SelectItem>
+                  {availableStatuses.map(status => (
+                      <SelectItem key={status} value={status} className="capitalize">
+                        {status.charAt(0).toUpperCase() + status.slice(1).replace('_', ' ')}
+                      </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
           </CardContent>
         </Card>
 
-        {/* Invoices Grid */}
         <div className="grid gap-6">
           {filteredInvoices.map((invoice) => (
               <Card key={invoice.id} className="hover:shadow-md transition-shadow">
@@ -222,7 +283,7 @@ const AdminFactures = () => {
                           <p className="text-sm text-slate-600">Facture</p>
                         </div>
                       </div>
-                      <div className="flex items-center gap-4 text-sm text-slate-600">
+                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-slate-600">
                         <div className="flex items-center gap-1">
                           <Building className="h-4 w-4" />
                           <span>{invoice.companyName}</span>
@@ -238,16 +299,16 @@ const AdminFactures = () => {
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 mt-2 sm:mt-0">
                       {getStatusBadge(invoice.status)}
                       {invoice.status === 'pending' && (
                           <Button
                               size="sm"
                               onClick={() => handleMarkAsPaid(invoice.id)}
                               disabled={actionLoading === invoice.id}
-                              className="flex items-center gap-2 bg-green-600 hover:bg-green-700"
+                              className="flex items-center gap-1.5 bg-green-600 hover:bg-green-700"
                           >
-                            <Check className="h-4 w-4" />
+                            <CheckCircle className="h-4 w-4" />
                             {actionLoading === invoice.id ? 'En cours...' : 'Marquer payée'}
                           </Button>
                       )}
@@ -255,7 +316,7 @@ const AdminFactures = () => {
                           variant="outline"
                           size="sm"
                           onClick={() => handleDownloadPdf(invoice)}
-                          className="flex items-center gap-2"
+                          className="flex items-center gap-1.5"
                       >
                         <Download className="h-4 w-4" />
                         PDF
@@ -266,49 +327,67 @@ const AdminFactures = () => {
                               variant="outline"
                               size="sm"
                               onClick={() => setSelectedInvoice(invoice)}
+                              className="flex items-center gap-1.5"
                           >
-                            <Eye className="h-4 w-4 mr-2" />
+                            <Eye className="h-4 w-4" />
                             Voir
                           </Button>
                         </DialogTrigger>
-                        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+                        <DialogContent className="sm:max-w-2xl max-h-[80vh] overflow-y-auto">
                           <DialogHeader>
                             <DialogTitle>Détails de la Facture {selectedInvoice?.number}</DialogTitle>
                           </DialogHeader>
                           {selectedInvoice && (
-                              <div className="space-y-6">
-                                <div className="grid grid-cols-2 gap-4">
+                              <div className="space-y-6 py-4">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                                   <div>
-                                    <label className="text-sm font-medium text-slate-700">Entreprise</label>
+                                    <p className="font-medium text-slate-500">Entreprise:</p>
                                     <p className="text-slate-900">{selectedInvoice.companyName}</p>
                                   </div>
                                   <div>
-                                    <label className="text-sm font-medium text-slate-700">Montant</label>
-                                    <p className="text-slate-900 font-medium">{formatCurrency(selectedInvoice.amount)}</p>
+                                    <p className="font-medium text-slate-500">Montant:</p>
+                                    <p className="text-slate-900 font-semibold">{formatCurrency(selectedInvoice.amount)}</p>
                                   </div>
                                   <div>
-                                    <label className="text-sm font-medium text-slate-700">Date d'échéance</label>
+                                    <p className="font-medium text-slate-500">Date d'émission:</p>
+                                    <p className="text-slate-900">{formatDate(new Date(selectedInvoice.createdAt))}</p>
+                                  </div>
+                                  <div>
+                                    <p className="font-medium text-slate-500">Date d'échéance:</p>
                                     <p className="text-slate-900">{formatDate(new Date(selectedInvoice.dueDate))}</p>
                                   </div>
                                   {selectedInvoice.paidAt && (
                                       <div>
-                                        <label className="text-sm font-medium text-slate-700">Payée le</label>
-                                        <p className="text-slate-900">{formatDate(new Date(selectedInvoice.paidAt))}</p>
+                                        <p className="font-medium text-slate-500">Payée le:</p>
+                                        <p className="text-green-600 font-semibold">{formatDate(new Date(selectedInvoice.paidAt))}</p>
                                       </div>
                                   )}
-                                </div>
-                                {/* Invoice Items Preview */}
-                                <div className="mt-4 pt-4 border-t border-slate-200">
-                                  <h4 className="font-medium text-slate-900 mb-2">Détails:</h4>
-                                  <div className="space-y-1">
-                                    {selectedInvoice.items.map((item) => (
-                                        <div key={item.id} className="flex justify-between text-sm text-slate-600">
-                                          <span>{item.description} (x{item.quantity})</span>
-                                          <span>{formatCurrency(item.total)}</span>
-                                        </div>
-                                    ))}
+                                  <div>
+                                    <p className="font-medium text-slate-500">Statut:</p>
+                                    {getStatusBadge(selectedInvoice.status)}
                                   </div>
                                 </div>
+
+                                {selectedInvoice.notes && (
+                                    <div>
+                                      <p className="font-medium text-slate-500">Notes:</p>
+                                      <p className="text-slate-700 whitespace-pre-wrap">{selectedInvoice.notes}</p>
+                                    </div>
+                                )}
+
+                                {selectedInvoice.items && selectedInvoice.items.length > 0 && (
+                                    <div className="mt-4 pt-4 border-t border-slate-200">
+                                      <h4 className="font-medium text-slate-900 mb-2">Détails des articles:</h4>
+                                      <div className="space-y-1 max-h-60 overflow-y-auto">
+                                        {selectedInvoice.items.map((item) => (
+                                            <div key={item.id} className="flex justify-between text-sm text-slate-600 p-1 hover:bg-slate-50 rounded">
+                                              <span className="truncate pr-2" title={item.description}>{item.description} (x{item.quantity})</span>
+                                              <span className="whitespace-nowrap">{formatCurrency(item.total)}</span>
+                                            </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                )}
                               </div>
                           )}
                         </DialogContent>

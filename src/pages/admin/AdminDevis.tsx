@@ -1,268 +1,380 @@
-
-import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+// src/pages/admin/AdminDevis.tsx
+import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { devisApi } from '@/services/api';
+import { Devis as DevisType } from '@/types';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+  DialogClose,
+  DialogTrigger
+} from "@/components/ui/dialog";
 import { formatDate, formatCurrency } from '@/lib/utils';
 import { useToast } from '@/hooks/useToast';
-import { devisApi } from '@/services/api';
-import { Devis } from '@/types';
-import { Search, FileText, Building, Calendar, Euro, Eye, Check, X } from 'lucide-react';
+import { downloadDevisPdf } from '@/lib/pdfGenerator';
+import {
+  Download, CheckCircle, XCircle, Search as SearchIcon, Plus, Filter,
+  Eye, FileText, Edit, MessageSquare, Clock, AlertTriangle, Send, Archive
+  // ExternalLink retiré des imports car plus utilisé ici
+} from 'lucide-react';
+import DevisForm, { DevisFormSubmitData } from '@/components/forms/DevisForm';
 
-const AdminDevis = () => {
+const AdminDevisPage = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
   const { toast } = useToast();
-  const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [devis, setDevis] = useState<Devis[]>([]);
+  const [devisList, setDevisList] = useState<DevisType[]>([]);
+  const [filteredDevis, setFilteredDevis] = useState<DevisType[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
-  const [selectedDevis, setSelectedDevis] = useState<Devis | null>(null);
-  const [rejectionReason, setRejectionReason] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
 
-  const loadDevis = async () => {
+  const [isRejectionDialogOpen, setIsRejectionDialogOpen] = useState(false);
+  const [rejectionReason, setRejectionReason] = useState('');
+  const [devisToUpdate, setDevisToUpdate] = useState<DevisType | null>(null);
+
+  const [isCreateDevisDialogOpen, setIsCreateDevisDialogOpen] = useState(false);
+  const [isSubmittingDevis, setIsSubmittingDevis] = useState(false);
+
+  useEffect(() => {
+    if (location.state?.openCreateDevisDialog) {
+      setIsCreateDevisDialogOpen(true);
+      navigate(location.pathname, { replace: true, state: {} });
+    }
+  }, [location.state, navigate, location.pathname]);
+
+  const getStatusBadge = (status: DevisType['status']) => {
+    const variants: { [key in DevisType['status']]: string } = {
+      draft: 'bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-200',
+      sent: 'bg-blue-100 text-blue-800 dark:bg-blue-700 dark:text-blue-200',
+      pending: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-600 dark:text-yellow-100',
+      approved: 'bg-green-100 text-green-800 dark:bg-green-700 dark:text-green-100',
+      rejected: 'bg-red-100 text-red-800 dark:bg-red-700 dark:text-red-100',
+      expired: 'bg-orange-100 text-orange-800 dark:bg-orange-600 dark:text-orange-100',
+    };
+    const labels: { [key in DevisType['status']]: string } = {
+      draft: 'Brouillon', sent: 'Envoyé', pending: 'En attente',
+      approved: 'Approuvé', rejected: 'Rejeté', expired: 'Expiré',
+    };
+    const icons: { [key in DevisType['status']]: React.ElementType } = {
+      draft: Clock, sent: Send, pending: Clock,
+      approved: CheckCircle, rejected: XCircle, expired: AlertTriangle,
+    };
+    const Icon = icons[status] || Filter;
+    return (
+        <Badge className={`${variants[status] || 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'} text-xs whitespace-nowrap flex items-center gap-1`}>
+          <Icon className="h-3 w-3" />
+          {labels[status] || status}
+        </Badge>
+    );
+  };
+
+  const fetchAllDevis = useCallback(async () => {
+    setLoading(true);
     try {
-      setLoading(true);
       const data = await devisApi.getAll();
-      setDevis(data);
+      setDevisList(data);
     } catch (error) {
-      toast({
-        title: 'Erreur',
-        description: 'Impossible de charger les devis',
-        variant: 'error'
-      });
+      console.error("[AdminDevisPage] Erreur lors du chargement des devis:", error);
+      toast({ title: 'Erreur', description: 'Impossible de charger la liste des devis.', variant: 'error' });
+      setDevisList([]);
     } finally {
       setLoading(false);
     }
-  };
+  }, [toast]);
 
   useEffect(() => {
-    loadDevis();
-  }, []);
+    fetchAllDevis();
+  }, [fetchAllDevis]);
 
-  const filteredDevis = devis.filter(d => {
-    const matchesSearch = d.object.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         d.companyName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         d.number.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = statusFilter === 'all' || d.status === statusFilter;
-    return matchesSearch && matchesStatus;
-  });
+  useEffect(() => {
+    let result = devisList;
+    if (searchTerm) {
+      result = result.filter(devis =>
+          devis.number.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          devis.companyName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          devis.object.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+    }
+    if (statusFilter && statusFilter !== 'all') {
+      result = result.filter(devis => devis.status === statusFilter);
+    }
+    setFilteredDevis(result);
+  }, [searchTerm, statusFilter, devisList]);
 
-  const handleUpdateStatus = async (id: string, status: Devis['status'], reason?: string) => {
+  const handleUpdateStatus = async (id: string, status: DevisType['status'], reason?: string) => {
+    setActionLoading(id);
     try {
-      setActionLoading(id);
       await devisApi.updateStatus(id, status, reason);
-      await loadDevis();
-      setSelectedDevis(null);
-      setRejectionReason('');
-      
-      toast({
-        title: 'Succès',
-        description: `Devis ${status === 'approved' ? 'approuvé' : 'rejeté'} avec succès`,
-        variant: 'success'
-      });
+      toast({ title: 'Succès', description: `Statut du devis mis à jour.`, variant: 'success' });
+      fetchAllDevis();
     } catch (error) {
-      toast({
-        title: 'Erreur',
-        description: 'Impossible de mettre à jour le devis',
-        variant: 'error'
-      });
+      console.error("[AdminDevisPage] Erreur lors de la mise à jour du statut:", error);
+      toast({ title: 'Erreur', description: 'Impossible de mettre à jour le statut.', variant: 'error' });
+    } finally {
+      setActionLoading(null);
+      setIsRejectionDialogOpen(false);
+      setRejectionReason('');
+      setDevisToUpdate(null);
+    }
+  };
+
+  const openRejectionDialog = (devis: DevisType) => {
+    setDevisToUpdate(devis);
+    setIsRejectionDialogOpen(true);
+  };
+
+  const confirmRejection = () => {
+    if (devisToUpdate) {
+      handleUpdateStatus(devisToUpdate.id, 'rejected', rejectionReason);
+    }
+  };
+
+  const handleDownloadPDF = async (devis: DevisType) => {
+    setActionLoading(`pdf-${devis.id}`);
+    try {
+      await downloadDevisPdf(devis);
+    } catch (error) {
+      console.error("[AdminDevisPage] Erreur PDF:", error);
+      toast({ title: 'Erreur PDF', description: 'Impossible de générer le PDF.', variant: 'error' });
     } finally {
       setActionLoading(null);
     }
   };
 
-  const getStatusBadge = (status: Devis['status']) => {
-    switch (status) {
-      case 'pending':
-        return <Badge variant="secondary">En attente</Badge>;
-      case 'approved':
-        return <Badge className="bg-green-100 text-green-800">Approuvé</Badge>;
-      case 'rejected':
-        return <Badge variant="destructive">Rejeté</Badge>;
-      default:
-        return <Badge variant="secondary">{status}</Badge>;
+  const handleCreateDevisSubmitInDialog = async (data: DevisFormSubmitData) => {
+    setIsSubmittingDevis(true);
+    try {
+      const validUntilDate = new Date(data.validUntil);
+      if (isNaN(validUntilDate.getTime())) {
+        toast({ title: 'Erreur de Validation', description: 'La date de validité fournie est invalide.', variant: 'error' });
+        setIsSubmittingDevis(false);
+        return;
+      }
+      const payloadForApi = {
+        companyId: data.companyId,
+        object: data.object,
+        amount: data.items.reduce((sum, item) => sum + (Number(item.quantity) * Number(item.unitPrice)), 0),
+        status: 'draft' as DevisType['status'], // Par défaut 'draft'
+        validUntil: validUntilDate,
+        notes: data.notes,
+        items: data.items.map(item => ({
+          description: item.description,
+          quantity: Number(item.quantity),
+          unitPrice: Number(item.unitPrice),
+        })),
+      };
+      const newDevis = await devisApi.create(payloadForApi);
+      toast({
+        title: `Devis Créé`,
+        description: `Le devis N°${newDevis.number} a été créé avec succès.`,
+        variant: 'success',
+      });
+      setIsCreateDevisDialogOpen(false);
+      fetchAllDevis();
+    } catch (error: unknown) {
+      console.error("[AdminDevisPage_Dialog] Erreur lors de la création du devis:", error);
+      const errorMessage = error instanceof Error ? error.message : 'Une erreur est survenue lors de la création du devis.';
+      toast({ title: 'Erreur de Création', description: errorMessage, variant: 'error' });
+    } finally {
+      setIsSubmittingDevis(false);
     }
   };
 
-  if (loading) {
+  // handleOpenInNewPage retiré car le bouton est supprimé
+  // const handleOpenInNewPage = () => {
+  //   setIsCreateDevisDialogOpen(false);
+  //   navigate('/admin/devis/creer');
+  // };
+
+  const availableStatuses: DevisType['status'][] = ['draft', 'sent', 'pending', 'approved', 'rejected', 'expired'];
+
+  if (loading && devisList.length === 0) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-arcadis-orange mx-auto"></div>
-          <p className="mt-4 text-slate-600">Chargement des devis...</p>
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-arcadis-orange mx-auto"></div>
+            <p className="mt-4 text-muted-foreground">Chargement des devis...</p>
+          </div>
         </div>
-      </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-900">Tous les Devis</h1>
-          <p className="text-slate-600 mt-1">
-            Gérez tous les devis des clients
-          </p>
+      <div className="space-y-6">
+        <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-bold text-foreground">Gestion des Devis</h1>
+            <p className="text-muted-foreground mt-1">Consultez et gérez tous les devis clients.</p>
+          </div>
+          <Dialog open={isCreateDevisDialogOpen} onOpenChange={setIsCreateDevisDialogOpen}>
+            <DialogTrigger asChild>
+              <Button className="flex items-center gap-2 w-full md:w-auto">
+                <Plus className="h-4 w-4" /> Nouveau Devis
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto">
+              {/* DialogHeader simplifié, bouton ExternalLink retiré */}
+              <DialogHeader>
+                <DialogTitle>Créer un Nouveau Devis</DialogTitle>
+                <DialogDescription>
+                  Remplissez les informations ci-dessous pour générer un nouveau devis.
+                </DialogDescription>
+              </DialogHeader>
+              <DevisForm
+                  onSubmit={handleCreateDevisSubmitInDialog}
+                  onCancel={() => setIsCreateDevisDialogOpen(false)}
+                  isLoading={isSubmittingDevis}
+              />
+            </DialogContent>
+          </Dialog>
         </div>
-      </div>
 
-      {/* Filters */}
-      <Card>
-        <CardContent className="p-4">
-          <div className="flex gap-4">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 h-4 w-4" />
+        <Card>
+          <CardContent className="p-4 space-y-4 md:space-y-0 md:flex md:items-center md:justify-between md:gap-4">
+            <div className="relative w-full md:flex-1">
+              <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
               <Input
-                placeholder="Rechercher par objet, entreprise ou numéro..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
+                  placeholder="Rechercher par N°, client, objet..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10 w-full"
               />
             </div>
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-48">
-                <SelectValue placeholder="Filtrer par statut" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Tous les statuts</SelectItem>
-                <SelectItem value="pending">En attente</SelectItem>
-                <SelectItem value="approved">Approuvé</SelectItem>
-                <SelectItem value="rejected">Rejeté</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Devis Grid */}
-      <div className="grid gap-6">
-        {filteredDevis.map((devisItem) => (
-          <Card key={devisItem.id} className="hover:shadow-md transition-shadow">
-            <CardHeader>
-              <div className="flex items-start justify-between">
-                <div className="space-y-2">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 bg-arcadis-gradient rounded-lg">
-                      <FileText className="h-5 w-5 text-white" />
-                    </div>
-                    <div>
-                      <CardTitle className="text-lg">{devisItem.object}</CardTitle>
-                      <p className="text-sm text-slate-600">{devisItem.number}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-4 text-sm text-slate-600">
-                    <div className="flex items-center gap-1">
-                      <Building className="h-4 w-4" />
-                      <span>{devisItem.companyName}</span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <Calendar className="h-4 w-4" />
-                      <span>{formatDate(devisItem.createdAt)}</span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <Euro className="h-4 w-4" />
-                      <span className="font-medium">{formatCurrency(devisItem.amount)}</span>
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="flex items-center gap-2">
-                  {getStatusBadge(devisItem.status)}
-                  <Dialog>
-                    <DialogTrigger asChild>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setSelectedDevis(devisItem)}
-                      >
-                        <Eye className="h-4 w-4 mr-2" />
-                        Voir
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent className="max-w-4xl">
-                      <DialogHeader>
-                        <DialogTitle>Détails du Devis {selectedDevis?.number}</DialogTitle>
-                      </DialogHeader>
-                      {selectedDevis && (
-                        <div className="space-y-6">
-                          <div className="grid grid-cols-2 gap-4">
-                            <div>
-                              <label className="text-sm font-medium text-slate-700">Entreprise</label>
-                              <p className="text-slate-900">{selectedDevis.companyName}</p>
-                            </div>
-                            <div>
-                              <label className="text-sm font-medium text-slate-700">Montant</label>
-                              <p className="text-slate-900 font-medium">{formatCurrency(selectedDevis.amount)}</p>
-                            </div>
-                          </div>
-                          
-                          {selectedDevis.status === 'pending' && (
-                            <div className="flex gap-2">
-                              <Button
-                                onClick={() => handleUpdateStatus(selectedDevis.id, 'approved')}
-                                disabled={actionLoading === selectedDevis.id}
-                                className="flex items-center gap-2"
-                              >
-                                <Check className="h-4 w-4" />
-                                Approuver
-                              </Button>
-                              <Dialog>
-                                <DialogTrigger asChild>
-                                  <Button variant="destructive" className="flex items-center gap-2">
-                                    <X className="h-4 w-4" />
-                                    Rejeter
-                                  </Button>
-                                </DialogTrigger>
-                                <DialogContent>
-                                  <DialogHeader>
-                                    <DialogTitle>Rejeter le devis</DialogTitle>
-                                  </DialogHeader>
-                                  <div className="space-y-4">
-                                    <Textarea
-                                      placeholder="Raison du rejet..."
-                                      value={rejectionReason}
-                                      onChange={(e) => setRejectionReason(e.target.value)}
-                                    />
-                                    <div className="flex gap-2 justify-end">
-                                      <Button variant="outline">Annuler</Button>
-                                      <Button
-                                        variant="destructive"
-                                        onClick={() => handleUpdateStatus(selectedDevis.id, 'rejected', rejectionReason)}
-                                        disabled={!rejectionReason.trim() || actionLoading === selectedDevis.id}
-                                      >
-                                        Rejeter le devis
-                                      </Button>
-                                    </div>
-                                  </div>
-                                </DialogContent>
-                              </Dialog>
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </DialogContent>
-                  </Dialog>
-                </div>
-              </div>
-            </CardHeader>
-          </Card>
-        ))}
-      </div>
-
-      {filteredDevis.length === 0 && !loading && (
-        <Card>
-          <CardContent className="p-8 text-center">
-            <FileText className="h-12 w-12 text-slate-300 mx-auto mb-4" />
-            <p className="text-slate-500">Aucun devis trouvé</p>
+            <div className="flex items-center gap-2 w-full md:w-auto">
+              <Filter className="h-4 w-4 text-muted-foreground hidden md:inline-block" />
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger className="w-full md:w-[200px]">
+                  <SelectValue placeholder="Filtrer par statut" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Tous les statuts</SelectItem>
+                  {availableStatuses.map(status => (
+                      <SelectItem key={status} value={status} className="capitalize">
+                        {status.charAt(0).toUpperCase() + status.slice(1).replace('_', ' ')}
+                      </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </CardContent>
         </Card>
-      )}
-    </div>
+
+        {filteredDevis.length === 0 && !loading ? (
+            <Card>
+              <CardContent className="p-8 text-center">
+                <FileText className="h-12 w-12 text-muted-foreground/50 mx-auto mb-4" />
+                <p className="text-muted-foreground">Aucun devis trouvé.</p>
+              </CardContent>
+            </Card>
+        ) : (
+            <div className="grid gap-6 md:grid-cols-1">
+              {filteredDevis.map((devis) => (
+                  <Card key={devis.id} className="hover:shadow-lg transition-shadow duration-200">
+                    <CardHeader>
+                      <div className="flex flex-col sm:flex-row justify-between sm:items-start gap-2">
+                        <div>
+                          <CardTitle className="text-xl text-primary">{devis.number}</CardTitle>
+                          <CardDescription className="text-sm text-muted-foreground">
+                            Client: {devis.companyName}
+                          </CardDescription>
+                        </div>
+                        {getStatusBadge(devis.status)}
+                      </div>
+                      <p className="text-sm text-foreground pt-1">
+                        <strong>Objet:</strong> {devis.object}
+                      </p>
+                      <p className="text-lg font-semibold text-foreground">
+                        Montant: {formatCurrency(devis.amount)}
+                      </p>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      <div className="text-sm text-muted-foreground">
+                        <p><strong>Créé le:</strong> {formatDate(new Date(devis.createdAt))}</p>
+                        <p><strong>Valide jusqu'au:</strong> {formatDate(new Date(devis.validUntil))}</p>
+                        {devis.status === 'rejected' && devis.rejectionReason && (
+                            <p className="text-destructive"><strong>Raison du rejet:</strong> {devis.rejectionReason}</p>
+                        )}
+                      </div>
+                      {devis.items && devis.items.length > 0 && (
+                          <div className="mt-2 pt-2 border-t">
+                            <h5 className="text-xs font-semibold text-muted-foreground mb-1">Aperçu des articles:</h5>
+                            <div className="space-y-0.5 max-h-20 overflow-y-auto text-xs">
+                              {devis.items.map((item) => (
+                                  <div key={item.id} className="flex justify-between text-muted-foreground">
+                                    <span className="truncate pr-1" title={item.description}>{item.description} (x{item.quantity})</span>
+                                    <span className="whitespace-nowrap">{formatCurrency(item.total)}</span>
+                                  </div>
+                              ))}
+                            </div>
+                          </div>
+                      )}
+                    </CardContent>
+                    <CardFooter className="flex flex-col sm:flex-row justify-end gap-2 pt-4 border-t">
+                      <Button variant="outline" size="sm" onClick={() => handleDownloadPDF(devis)} disabled={actionLoading === `pdf-${devis.id}`}>
+                        <Download className="mr-2 h-3.5 w-3.5" /> PDF
+                      </Button>
+                      {devis.status === 'draft' && (
+                          <Button variant="outline" size="sm" onClick={() => handleUpdateStatus(devis.id, 'sent')} disabled={actionLoading === devis.id} className="flex items-center gap-1.5">
+                            <Send className="mr-2 h-3.5 w-3.5" /> Marquer comme Envoyé
+                          </Button>
+                      )}
+                      {devis.status === 'sent' && (
+                          <Button variant="outline" size="sm" onClick={() => handleUpdateStatus(devis.id, 'draft')} disabled={actionLoading === devis.id} className="flex items-center gap-1.5">
+                            <Archive className="mr-2 h-3.5 w-3.5" /> Remettre en Brouillon
+                          </Button>
+                      )}
+                      {devis.status !== 'rejected' && devis.status !== 'draft' && (
+                          <Button variant="destructive" size="sm" onClick={() => openRejectionDialog(devis)} disabled={actionLoading === devis.id} className="flex items-center gap-1.5">
+                            <XCircle className="mr-2 h-3.5 w-3.5" /> Enregistrer un Rejet
+                          </Button>
+                      )}
+                      {devis.status !== 'expired' && devis.status !== 'approved' && devis.status !== 'rejected' && (
+                          <Button variant="outline" size="sm" onClick={() => handleUpdateStatus(devis.id, 'expired')} disabled={actionLoading === devis.id} className="flex items-center gap-1.5">
+                            <AlertTriangle className="mr-2 h-3.5 w-3.5" /> Marquer comme Expiré
+                          </Button>
+                      )}
+                    </CardFooter>
+                  </Card>
+              ))}
+            </div>
+        )}
+
+        <Dialog open={isRejectionDialogOpen} onOpenChange={setIsRejectionDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Enregistrer le Rejet du Devis N°{devisToUpdate?.number}</DialogTitle>
+              <DialogDescription>
+                Veuillez indiquer la raison du rejet (si communiquée par le client).
+              </DialogDescription>
+            </DialogHeader>
+            <Textarea
+                placeholder="Raison du rejet..."
+                value={rejectionReason}
+                onChange={(e) => setRejectionReason(e.target.value)}
+                rows={3}
+            />
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsRejectionDialogOpen(false)}>Annuler</Button>
+              <Button onClick={confirmRejection} variant="destructive" disabled={!rejectionReason.trim() || actionLoading === devisToUpdate?.id}>
+                Confirmer le Rejet
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </div>
   );
 };
 
-export default AdminDevis;
+export default AdminDevisPage;
