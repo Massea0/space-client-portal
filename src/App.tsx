@@ -1,18 +1,15 @@
 // src/App.tsx
 import React from 'react';
-import {
-    BrowserRouter as Router,
-    Routes,
-    Route,
-    Navigate,
-    useLocation,
-} from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { ToastProvider } from '@/hooks/useToast';
-import { ThemeProvider } from "@/components/theme/ThemeProvider"; // AJOUTÉ
+import { ThemeProvider } from "@/components/theme/ThemeProvider";
 
 import Layout from '@/components/layout/Layout';
+import AuthLayout from '@/components/layout/AuthLayout';
 import LoginForm from '@/components/auth/LoginForm';
+import ForgotPasswordForm from '@/components/auth/ForgotPasswordForm';
+import UpdatePasswordPage from '@/pages/UpdatePassword';
 import Dashboard from '@/pages/Dashboard';
 import DevisPage from '@/pages/Devis';
 import FacturesPage from '@/pages/Factures';
@@ -29,113 +26,120 @@ import NotFound from '@/pages/NotFound';
 
 // --- Définition de ProtectedRoute ---
 interface ProtectedRouteProps {
-    children: React.ReactNode;
+    children: React.ReactElement;
 }
 
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
     const { user, isLoading } = useAuth();
-    const location = useLocation();
-
-    if (isLoading) {
-        return (
-            <div className="min-h-screen flex items-center justify-center">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-arcadis-orange"></div>
-            </div>
-        );
-    }
-
-    if (!user) {
-        return <Navigate to="/login" state={{ from: location }} replace />;
-    }
-
-    return <>{children}</>;
+    if (isLoading) return null; // Or a loading spinner
+    return user ? children : <Navigate to="/login" replace />;
 };
 
 // --- Définition de AdminRoute ---
 interface AdminRouteProps {
-    children: React.ReactNode;
+    children: React.ReactElement;
 }
 
 const AdminRoute: React.FC<AdminRouteProps> = ({ children }) => {
-    const { user, isLoading: authIsLoading } = useAuth();
-
-    if (authIsLoading) {
-        return (
-            <div className="min-h-screen flex items-center justify-center">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-arcadis-orange"></div>
-            </div>
-        );
-    }
-
-    if (!user || user.role !== 'admin') {
-        console.log('[AdminRoute] Access denied. User role:', user?.role);
-        return <Navigate to="/dashboard" replace />;
-    }
-
-    return <>{children}</>;
+    const { user, isLoading } = useAuth();
+    if (isLoading) return null; // Or a loading spinner
+    if (!user) return <Navigate to="/login" replace />;
+    return user.role === 'admin' ? children : <Navigate to="/dashboard" replace />;
 };
 
 
 // --- Composant principal des routes ---
 function AppRoutes() {
     const { user, isLoading } = useAuth();
-    const location = useLocation();
 
     if (isLoading) {
         return (
-            <div className="min-h-screen flex items-center justify-center">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-arcadis-orange"></div>
+            <div className="flex h-screen w-full items-center justify-center bg-background">
+                <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-arcadis-orange"></div>
             </div>
         );
     }
 
-    if (!user) {
-        return (
-            <Routes>
-                <Route path="/login" element={<LoginForm />} />
-                <Route path="*" element={<Navigate to="/login" replace />} />
-            </Routes>
-        );
-    }
-
-    if (location.pathname === '/login') {
-        return <Navigate to="/dashboard" replace />;
-    }
-
     return (
-        <Layout>
-            <Routes>
-                {/* Routes Utilisateur Standard (Clients) */}
-                <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-                <Route path="/devis" element={<ProtectedRoute><DevisPage /></ProtectedRoute>} />
-                <Route path="/factures" element={<ProtectedRoute><FacturesPage /></ProtectedRoute>} />
-                <Route path="/support" element={<ProtectedRoute><SupportPage /></ProtectedRoute>} />
-                <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+        <Routes>
+            {/* Public routes with AuthLayout */}
+            <Route
+                path="/login"
+                element={
+                    user ? (
+                        <Navigate to="/dashboard" replace />
+                    ) : (
+                        <AuthLayout>
+                            <LoginForm />
+                        </AuthLayout>
+                    )
+                }
+            />
+            <Route
+                path="/forgot-password"
+                element={
+                    user ? (
+                        <Navigate to="/dashboard" replace />
+                    ) : (
+                        <AuthLayout>
+                            <ForgotPasswordForm />
+                        </AuthLayout>
+                    )
+                }
+            />
+            <Route
+                path="/update-password"
+                element={
+                    <AuthLayout>
+                        <UpdatePasswordPage />
+                    </AuthLayout>
+                }
+            />
 
-                {/* Routes Admin */}
-                <Route path="/admin/companies" element={<ProtectedRoute><AdminRoute><Companies /></AdminRoute></ProtectedRoute>} />
-                <Route path="/admin/users" element={<ProtectedRoute><AdminRoute><Users /></AdminRoute></ProtectedRoute>} />
-                <Route path="/admin/devis" element={<ProtectedRoute><AdminRoute><AdminDevisPage /></AdminRoute></ProtectedRoute>} />
-                <Route path="/admin/factures" element={<ProtectedRoute><AdminRoute><AdminFacturesPage /></AdminRoute></ProtectedRoute>} />
-                <Route path="/admin/support" element={<ProtectedRoute><AdminRoute><AdminSupportPage /></AdminRoute></ProtectedRoute>} />
+            {/* Redirect root to login or dashboard */}
+            <Route
+                path="/"
+                element={
+                    user ? (
+                        <Navigate to="/dashboard" replace />
+                    ) : (
+                        <Navigate to="/login" replace />
+                    )
+                }
+            />
 
-                <Route path="/" element={<Navigate to="/dashboard" replace />} />
-                <Route path="*" element={<NotFound />} />
-            </Routes>
-        </Layout>
+            {/* All protected routes are nested under the Layout route */}
+            <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
+                <Route path="/dashboard" element={<Dashboard />} />
+                <Route path="/devis" element={<DevisPage />} />
+                <Route path="/factures" element={<FacturesPage />} />
+                <Route path="/support" element={<SupportPage />} />
+                <Route path="/profile" element={<Profile />} />
+
+                {/* Admin Routes */}
+                <Route path="/admin/companies" element={<AdminRoute><Companies /></AdminRoute>} />
+                <Route path="/admin/users" element={<AdminRoute><Users /></AdminRoute>} />
+                <Route path="/admin/devis" element={<AdminRoute><AdminDevisPage /></AdminRoute>} />
+                <Route path="/admin/factures" element={<AdminRoute><AdminFacturesPage /></AdminRoute>} />
+                <Route path="/admin/support" element={<AdminRoute><AdminSupportPage /></AdminRoute>} />
+            </Route>
+
+            {/* Not Found Route */}
+            <Route path="*" element={<NotFound />} />
+        </Routes>
     );
 }
 
 function App() {
     return (
         <Router>
-            <AuthProvider>
-                <ThemeProvider attribute="class" defaultTheme="system" enableSystem> {/* AJOUTÉ */}
-                    <ToastProvider>
+            <ThemeProvider defaultTheme="system" storageKey="vite-ui-theme">
+                <ToastProvider>
+                    <AuthProvider>
                         <AppRoutes />
-                    </ToastProvider>
-                </ThemeProvider> {/* AJOUTÉ */}
-            </AuthProvider>
+                    </AuthProvider>
+                </ToastProvider>
+            </ThemeProvider>
         </Router>
     );
 }

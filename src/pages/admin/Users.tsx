@@ -22,7 +22,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "@/components/ui/alert-dialog"; // AlertDialogTrigger retiré car géré dynamiquement
+} from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -40,12 +40,12 @@ import { Company } from '@/types';
 import type {
   AdminFullUserCreatePayload,
   UserUpdateDbPayload,
-  UserProfile as ApiUserProfile // Renommé pour éviter conflit avec le nom du composant
+  UserProfile as ApiUserProfile
 } from '@/services/api';
 import {
   Plus, Search, KeyRound, XCircle, Filter as FilterIcon,
   ShieldCheck, ShieldAlert, ArchiveRestore, Trash2, Edit, Building, Archive
-} from 'lucide-react'; // UserIconLucide retiré car non utilisé
+} from 'lucide-react';
 
 interface NewUserFormDataType {
   email: string;
@@ -66,13 +66,13 @@ const Users = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState<string>('all');
   const [companyFilter, setCompanyFilter] = useState<string>('all');
-  const [viewFilter, setViewFilter] = useState<string>('active_blocked'); // 'active_blocked', 'trash'
+  const [viewFilter, setViewFilter] = useState<string>('active_blocked');
 
   const [allUsers, setAllUsers] = useState<ApiUserProfile[]>([]);
   const [filteredUsers, setFilteredUsers] = useState<ApiUserProfile[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
-  const [actionLoading, setActionLoading] = useState<string | null>(null); // e.g., 'delete-perm-userId', 'restore-userId'
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
 
   const [showNewUserDialog, setShowNewUserDialog] = useState(false);
   const [newUserFormData, setNewUserFormData] = useState<NewUserFormDataType>({
@@ -80,9 +80,8 @@ const Users = () => {
   });
 
   const [editingUser, setEditingUser] = useState<ApiUserProfile | null>(null);
-  const [userToManage, setUserToManage] = useState<ApiUserProfile | null>(null); // Pour soft-delete, restore, delete-permanently
+  const [userToManage, setUserToManage] = useState<ApiUserProfile | null>(null);
   const [dialogActionType, setDialogActionType] = useState<'softDelete' | 'deletePermanently' | null>(null);
-
 
   const [filteredByCompanyName, setFilteredByCompanyName] = useState<string | null>(null);
 
@@ -90,7 +89,7 @@ const Users = () => {
     try {
       setLoading(true);
       const [usersData, companiesData] = await Promise.all([
-        usersApi.getAll(true), // true pour inclure les soft-deleted pour la vue corbeille
+        usersApi.getAll(true),
         companiesApi.getAll()
       ]);
       setAllUsers(usersData);
@@ -98,7 +97,7 @@ const Users = () => {
 
       if (companyIdFromUrl) {
         const company = companiesData.find(c => c.id === companyIdFromUrl);
-        setFilteredByCompanyName(company?.name || null);
+        setFilteredByCompanyName(company?.name || `ID: ${companyIdFromUrl}`);
       } else {
         setFilteredByCompanyName(null);
       }
@@ -118,10 +117,9 @@ const Users = () => {
   useEffect(() => {
     let usersToDisplay = allUsers;
 
-    // Filtrer par vue (Actifs/Bloqués OU Corbeille)
     if (viewFilter === 'trash') {
       usersToDisplay = usersToDisplay.filter(user => !!user.deletedAt);
-    } else { // 'active_blocked'
+    } else {
       usersToDisplay = usersToDisplay.filter(user => !user.deletedAt);
     }
 
@@ -145,13 +143,11 @@ const Users = () => {
       usersToDisplay = usersToDisplay.filter(user =>
           (user.firstName?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
           (user.lastName?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
-          (user.email?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
-          (!companyIdFromUrl && (user.companyName?.toLowerCase() || '').includes(searchTerm.toLowerCase()))
+          (user.email?.toLowerCase() || '').includes(searchTerm.toLowerCase())
       );
     }
     setFilteredUsers(usersToDisplay);
   }, [searchTerm, roleFilter, companyFilter, viewFilter, allUsers, companyIdFromUrl, companies]);
-
 
   const handleAdminCreateFullUser = async (event?: React.FormEvent<HTMLFormElement>) => {
     if (event) event.preventDefault();
@@ -195,7 +191,6 @@ const Users = () => {
         role: editingUser.role,
         company_id: editingUser.role === 'client' ? editingUser.companyId : null,
         phone: editingUser.phone?.trim() || null,
-        // is_active et deleted_at ne sont pas modifiés ici
       };
       await usersApi.update(editingUser.id, updatesToSend);
       await loadData();
@@ -241,7 +236,7 @@ const Users = () => {
     try {
       setActionLoading(`delete-perm-${userId}`);
       await usersApi.deletePermanently(userId);
-      await loadData(); // Recharger pour que l'utilisateur disparaisse
+      await loadData();
       toast({ title: 'Succès', description: 'Utilisateur supprimé définitivement.', variant: 'success' });
     } catch (error) {
       toast({ title: 'Erreur', description: (error as Error)?.message || 'Échec de la suppression définitive.', variant: 'error' });
@@ -289,17 +284,16 @@ const Users = () => {
 
   return (
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-slate-900">Gestion des Utilisateurs</h1>
-            <p className="text-slate-600 mt-1">Gérez les utilisateurs du système</p>
+            <h1 className="text-2xl md:text-3xl font-bold text-slate-900 dark:text-slate-100">Gestion des Utilisateurs</h1>
+            <p className="text-slate-600 dark:text-slate-400 mt-1">Gérez les utilisateurs du système.</p>
           </div>
           <Dialog open={showNewUserDialog} onOpenChange={setShowNewUserDialog}>
-            <DialogTrigger asChild><Button className="flex items-center gap-2"><Plus /> Nouvel Utilisateur</Button></DialogTrigger>
+            <DialogTrigger asChild><Button className="flex items-center gap-2 w-full sm:w-auto"><Plus /> Nouvel Utilisateur</Button></DialogTrigger>
             <DialogContent className="max-w-2xl">
               <DialogHeader><DialogTitle>Ajouter un nouvel utilisateur</DialogTitle><DialogDescription>Remplissez les informations.</DialogDescription></DialogHeader>
               <form onSubmit={handleAdminCreateFullUser} className="space-y-4 py-4">
-                {/* Formulaire de création (inchangé par rapport à votre code précédent) */}
                 <div><Label htmlFor="newUserEmail">Email *</Label><Input id="newUserEmail" type="email" value={newUserFormData.email} onChange={(e) => setNewUserFormData({ ...newUserFormData, email: e.target.value })} required /></div>
                 <div><Label htmlFor="newUserPassword">Mot de passe initial * <span className="text-xs text-slate-500">(min. 6 caractères)</span></Label><div className="relative"><KeyRound className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 h-4 w-4" /><Input id="newUserPassword" type="password" value={newUserFormData.password_initial} onChange={(e) => setNewUserFormData({ ...newUserFormData, password_initial: e.target.value })} required className="pl-10" /></div></div>
                 <div><Label htmlFor="newUserFirstName">Prénom *</Label><Input id="newUserFirstName" value={newUserFormData.firstName} onChange={(e) => setNewUserFormData({ ...newUserFormData, firstName: e.target.value })} required /></div>
@@ -320,103 +314,99 @@ const Users = () => {
               <div className="flex items-center gap-2 w-full md:w-auto"><FilterIcon className="h-4 w-4 text-slate-500 hidden md:inline-block" /><Select value={roleFilter} onValueChange={setRoleFilter}><SelectTrigger className="w-full md:w-[180px]"><SelectValue placeholder="Rôle" /></SelectTrigger><SelectContent><SelectItem value="all">Tous rôles</SelectItem><SelectItem value="admin">Admin</SelectItem><SelectItem value="client">Client</SelectItem></SelectContent></Select></div>
               <div className="flex items-center gap-2 w-full md:w-auto"><Archive className="h-4 w-4 text-slate-500 hidden md:inline-block" /><Select value={viewFilter} onValueChange={setViewFilter}><SelectTrigger className="w-full md:w-[200px]"><SelectValue placeholder="Vue" /></SelectTrigger><SelectContent><SelectItem value="active_blocked">Actifs & Bloqués</SelectItem><SelectItem value="trash">Corbeille</SelectItem></SelectContent></Select></div>
               {!companyIdFromUrl && (<div className="flex items-center gap-2 w-full md:w-auto"><Building className="h-4 w-4 text-slate-500 hidden md:inline-block" /><Select value={companyFilter} onValueChange={setCompanyFilter} disabled={loading}><SelectTrigger className="w-full md:w-[220px]"><SelectValue placeholder="Entreprise" /></SelectTrigger><SelectContent><SelectItem value="all">Toutes</SelectItem>{companies.map(c => (<SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>))}</SelectContent></Select></div>)}
-              {filteredByCompanyName && (<div className="flex items-center gap-2 bg-slate-100 p-2 rounded-md w-full md:w-auto"><span className="text-sm text-slate-700">Filtré par : <strong>{filteredByCompanyName}</strong></span><Button variant="ghost" size="sm" onClick={resetCompanyFilter} className="text-blue-600 hover:text-blue-800"><XCircle className="h-4 w-4 mr-1" />Effacer</Button></div>)}
+              {companyIdFromUrl && <Button variant="ghost" onClick={resetCompanyFilter} className="flex items-center gap-2"><XCircle className="h-4 w-4" /> Retirer filtre entreprise</Button>}
             </div>
           </CardContent>
         </Card>
 
         <Card>
           <CardContent className="p-0">
-            <Table>
-              <TableHeader><TableRow><TableHead>Nom</TableHead><TableHead>Email</TableHead><TableHead>Rôle</TableHead><TableHead>Statut</TableHead><TableHead>Entreprise</TableHead><TableHead>Inscrit le</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
-              <TableBody>
-                {filteredUsers.length > 0 ? (
-                    filteredUsers.map((user) => (
-                        <TableRow key={user.id} className={cn(!user.isActive && !user.deletedAt && 'opacity-70 bg-yellow-50 dark:bg-yellow-900/20', user.deletedAt && 'bg-red-50 dark:bg-red-900/30 opacity-50')}>
-                          <TableCell className="font-medium">{user.firstName} {user.lastName}</TableCell>
-                          <TableCell>{user.email}</TableCell>
-                          <TableCell><Badge variant={user.role === 'admin' ? 'default' : 'secondary'}>{user.role === 'admin' ? 'Admin' : 'Client'}</Badge></TableCell>
-                          <TableCell>
-                            {user.deletedAt ? (
-                                <Badge variant="destructive" className="bg-red-100 text-red-700 hover:bg-red-200"><Trash2 className="h-3.5 w-3.5 mr-1" /> Corbeille</Badge>
-                            ) : user.isActive ? (
-                                <Badge variant="default" className="bg-green-100 text-green-700 hover:bg-green-200"><ShieldCheck className="h-3.5 w-3.5 mr-1" /> Actif</Badge>
-                            ) : (
-                                <Badge variant="outline" className="border-yellow-500 text-yellow-600 bg-yellow-50 hover:bg-yellow-100"><ShieldAlert className="h-3.5 w-3.5 mr-1" /> Bloqué</Badge>
-                            )}
-                          </TableCell>
-                          <TableCell>{user.companyName || 'N/A'}</TableCell>
-                          <TableCell>{formatDate(new Date(user.createdAt!))}</TableCell>
-                          <TableCell className="text-right space-x-1">
-                            {user.deletedAt ? ( // Actions pour la corbeille
-                                <>
-                                  <Button variant="outline" size="sm" onClick={() => handleRestoreUser(user.id)} disabled={actionLoading === `restore-${user.id}`} title="Restaurer"><ArchiveRestore className="h-4 w-4" /></Button>
-                                  <Button variant="destructive" size="sm" onClick={() => openConfirmationDialog(user, 'deletePermanently')} disabled={actionLoading === `delete-perm-${user.id}`} title="Supprimer définitivement"><Trash2 className="h-4 w-4" /></Button>
-                                </>
-                            ) : ( // Actions pour utilisateurs actifs/bloqués
-                                <>
-                                  <Button variant={user.isActive ? "outline" : "default"} size="sm" onClick={() => handleToggleUserActiveStatus(user.id, !user.isActive)} disabled={actionLoading === `status-${user.id}`} title={user.isActive ? "Bloquer" : "Débloquer"} className={user.isActive ? "border-yellow-500 text-yellow-600 hover:bg-yellow-50" : "bg-green-500 hover:bg-green-600 text-white"}>{user.isActive ? <ShieldAlert className="h-4 w-4" /> : <ShieldCheck className="h-4 w-4" />}</Button>
-                                  <Dialog open={editingUser?.id === user.id} onOpenChange={(open) => !open && setEditingUser(null)}>
-                                    <DialogTrigger asChild><Button variant="ghost" size="sm" onClick={() => setEditingUser({ ...user })} title="Modifier"><Edit className="h-4 w-4" /></Button></DialogTrigger>
-                                    {editingUser && editingUser.id === user.id && (
-                                        <DialogContent className="max-w-2xl">
-                                          <DialogHeader><DialogTitle>Modifier l'utilisateur</DialogTitle><DialogDescription>Mettez à jour les informations.</DialogDescription></DialogHeader>
-                                          <form onSubmit={handleEditUser} className="space-y-4 py-4">
-                                            {/* Formulaire d'édition (inchangé) */}
-                                            <div><Label>Email</Label><Input value={editingUser.email} readOnly disabled className="bg-slate-100" /></div>
-                                            <div><Label htmlFor={`editFirstName-${user.id}`}>Prénom *</Label><Input id={`editFirstName-${user.id}`} value={editingUser.firstName} onChange={(e) => setEditingUser({ ...editingUser, firstName: e.target.value })} required /></div>
-                                            <div><Label htmlFor={`editLastName-${user.id}`}>Nom *</Label><Input id={`editLastName-${user.id}`} value={editingUser.lastName} onChange={(e) => setEditingUser({ ...editingUser, lastName: e.target.value })} required /></div>
-                                            <div><Label htmlFor={`editRole-${user.id}`}>Rôle *</Label><Select value={editingUser.role} onValueChange={(value: 'client' | 'admin') => setEditingUser({ ...editingUser, role: value, companyId: value === 'admin' ? null : editingUser.companyId })}><SelectTrigger id={`editRole-${user.id}`}><SelectValue /></SelectTrigger><SelectContent><SelectItem value="client">Client</SelectItem><SelectItem value="admin">Admin</SelectItem></SelectContent></Select></div>
-                                            {editingUser.role === 'client' && (<div><Label htmlFor={`editCompany-${user.id}`}>Entreprise *</Label><Select value={editingUser.companyId || ''} onValueChange={(value) => setEditingUser({ ...editingUser, companyId: value })}><SelectTrigger id={`editCompany-${user.id}`}><SelectValue placeholder="Sélectionner" /></SelectTrigger><SelectContent>{companies.map(c => (<SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>))}</SelectContent></Select></div>)}
-                                            <div><Label htmlFor={`editPhone-${user.id}`}>Téléphone</Label><Input id={`editPhone-${user.id}`} value={editingUser.phone || ''} onChange={(e) => setEditingUser({ ...editingUser, phone: e.target.value })} /></div>
-                                            <div className="flex gap-2 justify-end pt-2"><Button type="button" variant="outline" onClick={() => setEditingUser(null)} disabled={actionLoading === `edit-${user.id}`}>Annuler</Button><Button type="submit" disabled={!editingUser.firstName.trim() || !editingUser.lastName.trim() || (editingUser.role === 'client' && !editingUser.companyId) || actionLoading === `edit-${user.id}`}>{actionLoading === `edit-${user.id}` ? 'Modif...' : 'Sauvegarder'}</Button></div>
-                                          </form>
-                                        </DialogContent>
-                                    )}
-                                  </Dialog>
-                                  <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive/90 hover:bg-destructive/10" onClick={() => openConfirmationDialog(user, 'softDelete')} title="Mettre à la corbeille"><Trash2 className="h-4 w-4" /></Button>
-                                </>
-                            )}
-                          </TableCell>
-                        </TableRow>
-                    ))
-                ) : (
-                    <TableRow><TableCell colSpan={7} className="h-24 text-center">{loading ? 'Chargement...' : 'Aucun utilisateur.'}</TableCell></TableRow>
-                )}
-              </TableBody>
-            </Table>
+            <div className="relative w-full overflow-x-auto">
+              <Table>
+                <TableHeader><TableRow><TableHead>Nom</TableHead><TableHead className="hidden md:table-cell">Email</TableHead><TableHead>Rôle</TableHead><TableHead>Statut</TableHead><TableHead className="hidden lg:table-cell">Entreprise</TableHead><TableHead className="hidden lg:table-cell">Inscrit le</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
+                <TableBody>
+                  {filteredUsers.length > 0 ? (
+                      filteredUsers.map((user) => (
+                          <TableRow key={user.id} className={cn(!user.isActive && !user.deletedAt && 'opacity-70 bg-yellow-50 dark:bg-yellow-900/20', user.deletedAt && 'bg-red-50 dark:bg-red-900/30 opacity-50')}>
+                            <TableCell className="font-medium">{user.firstName} {user.lastName}</TableCell>
+                            <TableCell className="hidden md:table-cell">{user.email}</TableCell>
+                            <TableCell><Badge variant={user.role === 'admin' ? 'default' : 'secondary'}>{user.role === 'admin' ? 'Admin' : 'Client'}</Badge></TableCell>
+                            <TableCell>
+                              {user.deletedAt ? (
+                                  <Badge variant="destructive" className="bg-red-100 text-red-700 hover:bg-red-200"><Trash2 className="h-3.5 w-3.5 mr-1" /> Corbeille</Badge>
+                              ) : user.isActive ? (
+                                  <Badge variant="default" className="bg-green-100 text-green-700 hover:bg-green-200"><ShieldCheck className="h-3.5 w-3.5 mr-1" /> Actif</Badge>
+                              ) : (
+                                  <Badge variant="outline" className="border-yellow-500 text-yellow-600 bg-yellow-50 hover:bg-yellow-100"><ShieldAlert className="h-3.5 w-3.5 mr-1" /> Bloqué</Badge>
+                              )}
+                            </TableCell>
+                            <TableCell className="hidden lg:table-cell">{user.companyName || 'N/A'}</TableCell>
+                            <TableCell className="hidden lg:table-cell">{formatDate(new Date(user.createdAt!))}</TableCell>
+                            <TableCell className="text-right space-x-1">
+                              {user.deletedAt ? (
+                                  <>
+                                    <Button variant="outline" size="sm" onClick={() => handleRestoreUser(user.id)} disabled={actionLoading === `restore-${user.id}`} title="Restaurer"><ArchiveRestore className="h-4 w-4" /></Button>
+                                    <Button variant="destructive" size="sm" onClick={() => openConfirmationDialog(user, 'deletePermanently')} disabled={actionLoading === `delete-perm-${user.id}`} title="Supprimer définitivement"><Trash2 className="h-4 w-4" /></Button>
+                                  </>
+                              ) : (
+                                  <>
+                                    <Button variant="outline" size="sm" onClick={() => handleToggleUserActiveStatus(user.id, !user.isActive)} disabled={actionLoading === `status-${user.id}`} title={user.isActive ? 'Bloquer' : 'Débloquer'}>{user.isActive ? <ShieldAlert className="h-4 w-4" /> : <ShieldCheck className="h-4 w-4" />}</Button>
+                                    <Button variant="outline" size="sm" onClick={() => setEditingUser(user)} title="Modifier"><Edit className="h-4 w-4" /></Button>
+                                    <Button variant="outline" size="sm" onClick={() => openConfirmationDialog(user, 'softDelete')} disabled={actionLoading === `soft-delete-${user.id}`} title="Mettre à la corbeille"><Archive className="h-4 w-4" /></Button>
+                                  </>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                      ))
+                  ) : (
+                      <TableRow><TableCell colSpan={7} className="text-center h-24">Aucun utilisateur trouvé.</TableCell></TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
           </CardContent>
         </Card>
 
-        {/* AlertDialog pour la confirmation */}
         <AlertDialog open={!!userToManage && !!dialogActionType} onOpenChange={(open) => { if (!open) { setUserToManage(null); setDialogActionType(null); }}}>
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>
-                {dialogActionType === 'softDelete' && "Mettre à la corbeille ?"}
-                {dialogActionType === 'deletePermanently' && "Supprimer définitivement ?"}
-              </AlertDialogTitle>
+              <AlertDialogTitle>Êtes-vous sûr ?</AlertDialogTitle>
               <AlertDialogDescriptionComponent>
-                {dialogActionType === 'softDelete' && `L'utilisateur "${userToManage?.firstName} ${userToManage?.lastName}" sera mis à la corbeille. Il pourra être restauré.`}
-                {dialogActionType === 'deletePermanently' && `L'utilisateur "${userToManage?.firstName} ${userToManage?.lastName}" sera supprimé définitivement. Cette action est irréversible.`}
+                {dialogActionType === 'softDelete' && `L'utilisateur "${userToManage?.firstName} ${userToManage?.lastName}" sera déplacé vers la corbeille. Il pourra être restauré plus tard.`}
+                {dialogActionType === 'deletePermanently' && `Cette action est irréversible et supprimera définitivement l'utilisateur "${userToManage?.firstName} ${userToManage?.lastName}".`}
               </AlertDialogDescriptionComponent>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel onClick={() => { setUserToManage(null); setDialogActionType(null);}} disabled={!!actionLoading}>Annuler</AlertDialogCancel>
+              <AlertDialogCancel>Annuler</AlertDialogCancel>
               <AlertDialogAction
                   onClick={() => {
-                    if (userToManage && dialogActionType === 'softDelete') handleSoftDeleteUser(userToManage.id);
-                    if (userToManage && dialogActionType === 'deletePermanently') handleDeleteUserPermanently(userToManage.id);
+                    if (dialogActionType === 'softDelete') handleSoftDeleteUser(userToManage!.id);
+                    if (dialogActionType === 'deletePermanently') handleDeleteUserPermanently(userToManage!.id);
                   }}
-                  disabled={!!actionLoading}
-                  className={dialogActionType === 'deletePermanently' ? "bg-destructive hover:bg-destructive/90" : ""}
+                  className={cn(dialogActionType === 'deletePermanently' && 'bg-destructive text-destructive-foreground hover:bg-destructive/90')}
               >
-                {actionLoading ? 'Traitement...' : (dialogActionType === 'softDelete' ? 'Mettre à la corbeille' : 'Supprimer définitivement')}
+                Confirmer
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
 
+        {editingUser && (
+            <Dialog open={!!editingUser} onOpenChange={(open) => !open && setEditingUser(null)}>
+              <DialogContent className="max-w-2xl">
+                <DialogHeader><DialogTitle>Modifier l'utilisateur</DialogTitle><DialogDescription>Mettez à jour les informations de {editingUser.firstName}.</DialogDescription></DialogHeader>
+                <form onSubmit={handleEditUser} className="space-y-4 py-4">
+                  <div><Label>Email</Label><Input value={editingUser.email} disabled /></div>
+                  <div><Label htmlFor="editUserFirstName">Prénom *</Label><Input id="editUserFirstName" value={editingUser.firstName} onChange={(e) => setEditingUser({ ...editingUser, firstName: e.target.value })} required /></div>
+                  <div><Label htmlFor="editUserLastName">Nom *</Label><Input id="editUserLastName" value={editingUser.lastName} onChange={(e) => setEditingUser({ ...editingUser, lastName: e.target.value })} required /></div>
+                  <div><Label htmlFor="editUserRole">Rôle *</Label><Select value={editingUser.role} onValueChange={(value: 'client' | 'admin') => setEditingUser({ ...editingUser, role: value, companyId: value === 'admin' ? null : editingUser.companyId })}><SelectTrigger id="editUserRole"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="client">Client</SelectItem><SelectItem value="admin">Administrateur</SelectItem></SelectContent></Select></div>
+                  {editingUser.role === 'client' && (<div><Label htmlFor="editUserCompany">Entreprise cliente *</Label><Select value={editingUser.companyId || ''} onValueChange={(value) => setEditingUser({ ...editingUser, companyId: value })}><SelectTrigger id="editUserCompany"><SelectValue placeholder="Sélectionner" /></SelectTrigger><SelectContent>{companies.map(c => (<SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>))}</SelectContent></Select></div>)}
+                  <div><Label htmlFor="editUserPhone">Téléphone</Label><Input id="editUserPhone" value={editingUser.phone || ''} onChange={(e) => setEditingUser({ ...editingUser, phone: e.target.value })} /></div>
+                  <div className="flex gap-2 justify-end pt-2"><Button type="button" variant="outline" onClick={() => setEditingUser(null)} disabled={actionLoading === `edit-${editingUser.id}`}>Annuler</Button><Button type="submit" disabled={!editingUser.firstName.trim() || !editingUser.lastName.trim() || (editingUser.role === 'client' && !editingUser.companyId) || actionLoading === `edit-${editingUser.id}`}>{actionLoading === `edit-${editingUser.id}` ? 'Sauvegarde...' : 'Sauvegarder'}</Button></div>
+                </form>
+              </DialogContent>
+            </Dialog>
+        )}
       </div>
   );
 };

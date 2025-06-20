@@ -1,31 +1,93 @@
 // src/components/layout/Layout.tsx
-import React from 'react';
-// MODIFIÉ ICI: Importer 'Sidebar' comme un export nommé et l'utiliser comme fournisseur.
-import { Sidebar } from '@/components/ui/sidebar';
+import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
+import { Outlet } from 'react-router-dom';
 import AppSidebar from './Sidebar';
 import Header from './Header';
+import { cn } from '@/lib/utils';
 
-interface LayoutProps {
-  children: React.ReactNode;
-}
+// --- Sidebar Context and Provider ---
+const useMediaQuery = (query: string) => {
+    const [matches, setMatches] = useState(false);
+    useEffect(() => {
+        const media = window.matchMedia(query);
+        if (media.matches !== matches) {
+            setMatches(media.matches);
+        }
+        const listener = () => setMatches(media.matches);
+        window.addEventListener('resize', listener);
+        return () => window.removeEventListener('resize', listener);
+    }, [matches, query]);
+    return matches;
+};
 
-const Layout: React.FC<LayoutProps> = ({ children }) => {
-  return (
-      // MODIFIÉ ICI: Utiliser <Sidebar> au lieu de <SidebarProvider>
-      <Sidebar>
-        <div className="min-h-screen flex w-full bg-background text-foreground"> {/* Utilisation des variables de thème Tailwind */}
-          <AppSidebar />
-          <div className="flex-1 flex flex-col">
-            <Header />
-            <main className="flex-1 p-4 sm:p-6 md:p-8 bg-background"> {/* Utilisation des variables de thème et padding ajusté */}
-              <div className="max-w-full sm:max-w-7xl mx-auto"> {/* max-w-full pour mobile, 7xl pour plus grand */}
-                {children}
-              </div>
-            </main>
-          </div>
+type SidebarContextType = {
+    state: 'open' | 'collapsed';
+    isMobile: boolean;
+    toggle: () => void;
+};
+
+const SidebarContext = createContext<SidebarContextType | undefined>(undefined);
+
+export const useAppSidebar = () => {
+    const context = useContext(SidebarContext);
+    if (!context) {
+        throw new Error('useAppSidebar must be used within a AppSidebarProvider');
+    }
+    return context;
+};
+
+const AppSidebarProvider = ({ children }: { children: React.ReactNode }) => {
+    const isMobile = useMediaQuery('(max-width: 768px)');
+    const [state, setState] = useState<'open' | 'collapsed'>(isMobile ? 'collapsed' : 'open');
+
+    useEffect(() => {
+        if (!isMobile) {
+            setState('open');
+        } else {
+            setState('collapsed');
+        }
+    }, [isMobile]);
+
+    const toggle = () => {
+        setState(prevState => (prevState === 'open' ? 'collapsed' : 'open'));
+    };
+
+    const value = useMemo(() => ({ state, isMobile, toggle }), [state, isMobile]);
+
+    return <SidebarContext.Provider value={value}>{children}</SidebarContext.Provider>;
+};
+
+
+// --- Layout Components ---
+
+const AppLayoutContent = () => {
+    return (
+        <div className="relative flex min-h-screen w-full bg-background">
+            <AppSidebar />
+            <div
+                className={cn(
+                    "flex flex-1 flex-col",
+                    // The unnecessary margin has been removed.
+                    // On desktop, the sidebar is 'static' and part of the flex layout,
+                    // so flex-1 on this div correctly fills the remaining space.
+                    "transition-all duration-300 ease-in-out"
+                )}
+            >
+                <Header />
+                <main className="flex-1 overflow-y-auto p-4 sm:px-6 md:gap-8">
+                    <Outlet />
+                </main>
+            </div>
         </div>
-      </Sidebar>
-  );
+    );
+};
+
+const Layout = () => {
+    return (
+        <AppSidebarProvider>
+            <AppLayoutContent />
+        </AppSidebarProvider>
+    );
 };
 
 export default Layout;

@@ -1,117 +1,82 @@
-// src/components/auth/LoginForm.tsx
 import React, { useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { useToast } from '@/hooks/useToast';
+import { Mail, KeyRound } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 const LoginForm = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
-  const { login, isLoading, error: authError } = useAuth(); // Utiliser authError du contexte
-  const { toast } = useToast();
+  const { login, isLoading, error } = useAuth();
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    setError(''); // Réinitialiser l'erreur locale
-
     try {
       await login({ email, password });
-      toast({
-        title: "Connexion réussie",
-        description: "Bienvenue sur Arcadis Space",
-        variant: "success"
-      });
-      // La redirection est gérée par AppRoutes ou le contexte
     } catch (err) {
-      // L'erreur est déjà gérée et mise à jour dans AuthContext (via setError là-bas)
-      // Nous n'avons pas besoin de la redéfinir ici, sauf si nous voulons un message différent
-      // pour les erreurs de type "invalid login credentials" qui ne sont pas "compte désactivé".
-      if (err instanceof Error && err.message !== 'Votre compte a été désactivé. Veuillez contacter le développeur.') {
-        setError('Email ou mot de passe incorrect. Veuillez réessayer.');
-      }
-      // Si c'est l'erreur de compte désactivé, `authError` du contexte sera déjà mis à jour et affiché.
+      // Error is handled in AuthContext and displayed via the `error` state
+      console.error("Login failed from form:", err);
     }
   };
 
-  // Utiliser l'erreur du contexte d'authentification pour l'affichage,
-  // car elle contient le message spécifique pour les comptes désactivés.
-  // S'il y a une erreur locale (comme "Email ou mot de passe incorrect"), on l'affiche.
-  const displayError = error || authError;
-
   return (
-      <div className="min-h-screen flex items-center justify-center bg-arcadis-gradient-subtle">
-        <div className="w-full max-w-md p-6">
-          <div className="text-center mb-8">
-            <img
-                src="/logo/logo-svg.svg"
-                alt="Arcadis Technologies"
-                className="h-21 w-auto mx-auto -mb-20" // MODIFIÉ ICI: h-16 -> h-20
-            />
-            <h1 className="text-3xl font-bold bg-arcadis-gradient bg-clip-text text-transparent">
-              Arcadis Space
-            </h1>
-            <p className="text-slate-600 mt-2">Portail Client</p>
-          </div>
-
-          <Card className="bg-white shadow-lg">
-            <CardHeader>
-              <CardTitle>Connexion</CardTitle>
-              <CardDescription>
-                Accédez à votre espace client sécurisé
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="email">Email</Label>
-                  <Input
-                      id="email"
-                      type="email"
-                      autoComplete="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder="votre-email@example.com"
-                      required
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="password">Mot de passe</Label>
-                  <Input
-                      id="password"
-                      type="password"
-                      autoComplete="current-password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      placeholder="••••••••"
-                      required
-                  />
-                </div>
-
-                {displayError && (
-                    <Alert variant="destructive">
-                      <AlertDescription>{displayError}</AlertDescription>
-                    </Alert>
-                )}
-
-                <Button
-                    type="submit"
-                    className="w-full bg-arcadis-gradient hover:opacity-90"
-                    disabled={isLoading}
+      <Card className="w-full max-w-md">
+        <CardHeader className="text-center">
+          <img src="/logo/logo-header.png" alt="Arcadis Technologies" className="mx-auto h-16 w-auto" />
+          <CardTitle className="text-2xl mt-4">Connexion</CardTitle>
+          <CardDescription>
+            Accédez à votre portail client Arcadis Space.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleLogin} className="grid gap-4">
+            <div className="grid gap-2">
+              <Label htmlFor="email">Email</Label>
+              <div className="relative">
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground h-4 w-4" />
+                <Input
+                    id="email"
+                    type="email"
+                    placeholder="votre.email@exemple.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                    className="pl-10"
+                />
+              </div>
+            </div>
+            <div className="grid gap-2">
+              <div className="flex items-center">
+                <Label htmlFor="password">Mot de passe</Label>
+                <Link
+                    to="/forgot-password"
+                    className="ml-auto inline-block text-sm text-primary hover:underline"
                 >
-                  {isLoading ? 'Connexion...' : 'Se connecter'}
-                </Button>
-
-              </form>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
+                  Mot de passe oublié ?
+                </Link>
+              </div>
+              <div className="relative">
+                <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground h-4 w-4" />
+                <Input
+                    id="password"
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    className="pl-10"
+                />
+              </div>
+            </div>
+            {error && <p className="text-sm text-destructive">{error}</p>}
+            <Button type="submit" className="w-full" disabled={isLoading}>
+              {isLoading ? 'Connexion...' : 'Se connecter'}
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
   );
 };
 

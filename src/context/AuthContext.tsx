@@ -83,7 +83,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
                 phone?: string;
                 created_at: string;
                 is_active: boolean;
-                deleted_at?: string | null; // MODIFIÉ: Ajout de deleted_at
+                deleted_at?: string | null;
                 companies?: { name: string } | null;
             };
             const { data: userProfile, error: profileError } =
@@ -108,7 +108,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
                     companyName: companyName,
                     createdAt: new Date(userProfile.created_at),
                     isActive: userProfile.is_active,
-                    deletedAt: userProfile.deleted_at ? new Date(userProfile.deleted_at) : null, // MODIFIÉ: Mapper deleted_at
+                    deletedAt: userProfile.deleted_at ? new Date(userProfile.deleted_at) : null,
                 };
             }
             console.warn('[AuthContext] fetchFullUserProfile: Profile not found for ID:', sessionUser.id);
@@ -130,9 +130,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
                 activeSupabaseSessionRef.current = currentSupabaseSession;
                 console.log(
                     '[AuthContext] onAuthStateChange. Event:', event,
-                    'Session User ID:', currentSupabaseSession?.user?.id,
-                    'Local User State ID (at listener setup):', user?.id,
-                    'Last Fetched ID (ref):', lastSuccessfullyFetchedUserIdRef.current
+                    'Session User ID:', currentSupabaseSession?.user?.id
                 );
 
                 if (event === 'SIGNED_OUT') {
@@ -165,20 +163,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
                         setIsLoading(true);
                         try {
                             const fetchedUser = await fetchFullUserProfile(currentSupabaseSession.user);
-                            // MODIFIÉ ICI: Vérifier isActive ET deletedAt
                             if (fetchedUser && (!fetchedUser.isActive || fetchedUser.deletedAt)) {
-                                const reason = fetchedUser.deletedAt ? "dans la corbeille" : "inactif";
+                                const reason = fetchedUser.deletedAt ? "in trash" : "inactive";
                                 console.warn(`[AuthContext] User ${supabaseUserId} is ${reason}. Forcing sign out.`);
                                 await supabase.auth.signOut();
                                 setUser(null);
                                 lastSuccessfullyFetchedUserIdRef.current = null;
-                                setError(fetchedUser.deletedAt ? 'Votre compte a été supprimé.' : 'Votre compte a été désactivé. Veuillez contacter l\'administrateur.');
+                                setError(fetchedUser.deletedAt ? 'Your account has been deleted.' : 'Your account has been disabled. Please contact an administrator.');
                             } else {
                                 setUser(fetchedUser);
                                 if (fetchedUser) {
                                     lastSuccessfullyFetchedUserIdRef.current = supabaseUserId;
                                 }
-                                setError(''); // Clear any previous error on successful fetch
+                                setError('');
                             }
                         } catch (e) {
                             console.error(`[AuthContext] Profile fetch exception for ${supabaseUserId}:`, e);
@@ -195,32 +192,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
             }
         );
 
+        // MODIFIED: Simplified fallback initialization logic
         const initializeSession = async () => {
             if (activeSupabaseSessionRef.current === undefined) {
-                console.log('[AuthContext] initializeSession: Manually checking session.');
+                console.log('[AuthContext] initializeSession: Manually checking session as a fallback.');
                 try {
                     const { data: { session } } = await supabase.auth.getSession();
-                    if (!session && !user && isLoading) {
+                    if (!session) {
                         setIsLoading(false);
                         lastSuccessfullyFetchedUserIdRef.current = null;
                     }
-                    else if (isLoading && !session) {
-                        setIsLoading(false);
-                    }
                 } catch (e) {
                     console.error('[AuthContext] initializeSession: Exception:', e);
-                    if (isLoading) setIsLoading(false);
+                    setIsLoading(false);
                 }
             }
         };
 
+        // MODIFIED: Safer timeout logic to prevent race conditions
         const initTimer = setTimeout(() => {
-            if (isLoading && activeSupabaseSessionRef.current === undefined && !user) {
+            // This fallback only runs if the onAuthStateChange listener has not yet
+            // fired. This handles edge cases where the listener is slow or fails,
+            // preventing the app from being stuck in a loading state.
+            if (activeSupabaseSessionRef.current === undefined) {
                 initializeSession();
-            } else if (isLoading) {
-                setIsLoading(false);
             }
-        }, 500);
+        }, 1500); // Increased delay for more stability
 
 
         return () => {
@@ -228,7 +225,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
             authListener?.subscription.unsubscribe();
             clearTimeout(initTimer);
         };
-    }, []); // user retiré des dépendances pour éviter boucle de re-fetch
+    }, []);
 
     const login = async (credentials: LoginCredentials): Promise<void> => {
         setIsLoading(true);
@@ -249,26 +246,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
             if (signInData.user) {
                 const fetchedUser = await fetchFullUserProfile(signInData.user);
 
-                // MODIFIÉ ICI: Vérifier isActive ET deletedAt
                 if (fetchedUser && (!fetchedUser.isActive || fetchedUser.deletedAt)) {
                     await supabase.auth.signOut();
-                    const inactiveErrorMsg = fetchedUser.deletedAt ? 'Votre compte a été supprimé.' : 'Votre compte a été désactivé. Veuillez contacter l\'administrateur.';
+                    const inactiveErrorMsg = fetchedUser.deletedAt ? 'Your account has been deleted.' : 'Your account has been disabled. Please contact an administrator.';
                     setError(inactiveErrorMsg);
                     setUser(null);
                     lastSuccessfullyFetchedUserIdRef.current = null;
                     setIsLoading(false);
                     throw new Error(inactiveErrorMsg);
                 }
-                // Si l'utilisateur est actif et non supprimé, onAuthStateChange s'occupera de le setter.
-                // Et on efface l'erreur locale si tout va bien.
                 setError('');
             } else {
-                throw new Error("Authentification réussie mais pas d'objet utilisateur retourné.");
+                throw new Error("Authentication successful but no user object returned.");
             }
-            console.log('[AuthContext] login: Sign-in initiated. User ID:', signInData.user?.id);
-            // setIsLoading(false) est géré par onAuthStateChange
         } catch (err) {
-            let errorMessage = 'Une erreur inattendue est survenue lors de la connexion.';
+            let errorMessage = 'An unexpected error occurred during login.';
             if (err instanceof AuthError) {
                 errorMessage = err.message;
             } else if (err instanceof Error) {
@@ -276,13 +268,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
             }
 
             const specificErrors = [
-                'Votre compte a été désactivé. Veuillez contacter l\'administrateur.',
-                'Votre compte a été supprimé.'
+                'Your account has been disabled. Please contact an administrator.',
+                'Your account has been deleted.'
             ];
 
             if (!(err instanceof Error && specificErrors.includes(err.message))) {
                 if (errorMessage.toLowerCase().includes('invalid login credentials')) {
-                    setError('Email ou mot de passe incorrect.');
+                    setError('Incorrect email or password.');
                 } else {
                     setError(errorMessage);
                 }
@@ -292,8 +284,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
             setUser(null);
             lastSuccessfullyFetchedUserIdRef.current = null;
-            if(isLoading) setIsLoading(false); // S'assurer que isLoading est false en cas d'erreur précoce
-            throw err; // Rethrow pour que le composant LoginForm puisse aussi le catcher si besoin
+            if(isLoading) setIsLoading(false);
+            throw err;
         }
     };
 

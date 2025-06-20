@@ -3,7 +3,7 @@ import React from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { LogOut, User as UserIcon } from 'lucide-react';
+import { LogOut, User as UserIcon, Menu } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -13,30 +13,41 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Link } from 'react-router-dom';
-import { cn } from '@/lib/utils'; // Importer cn
+import { cn } from '@/lib/utils';
+import { useAppSidebar } from './Layout'; // Import the hook for sidebar state
 
 const Header = () => {
   const { user, logout } = useAuth();
+  const { toggle } = useAppSidebar(); // Get the toggle function
 
   if (!user) return null;
 
   const userInitials = `${user.firstName.charAt(0)}${user.lastName.charAt(0)}`;
 
   return (
-      // MODIFIÉ ICI: Utilisation des variables de thème
       <header className={cn(
-          "px-6 py-4",
-          "bg-card border-b border-border text-card-foreground" // Utilise les variables de card pour le header
+          "sticky top-0 z-30 px-4 sm:px-6 py-3", // Adjusted padding
+          "bg-card border-b border-border text-card-foreground"
       )}>
         <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-2 sm:space-x-4">
+            {/* Hamburger Menu for Mobile */}
+            <Button
+                variant="ghost"
+                size="icon"
+                className="md:hidden shrink-0"
+                onClick={toggle}
+            >
+              <Menu className="h-5 w-5" />
+              <span className="sr-only">Toggle Menu</span>
+            </Button>
+
             <img
-                src="/logo/logo-header.png" // Assurez-vous que ce logo est adapté aux deux thèmes ou utilisez un SVG
+                src="/logo/logo-header.png"
                 alt="Arcadis Technologies"
-                className="h-10 w-auto" // Ajusté pour une taille plus standard
+                className="h-9 sm:h-10 w-auto"
             />
             <div className="hidden md:block">
-              {/* Le dégradé est défini dans index.css et devrait s'adapter si les couleurs primaires changent avec le thème */}
               <h1 className="text-2xl font-bold bg-arcadis-gradient bg-clip-text text-transparent">
                 Arcadis Space
               </h1>
@@ -44,12 +55,12 @@ const Header = () => {
             </div>
           </div>
 
-          <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-2 sm:space-x-4">
             <div className="hidden md:block text-right">
-              <p className="text-sm font-medium text-foreground"> {/* text-foreground pour le nom */}
+              <p className="text-sm font-medium text-foreground">
                 {user.firstName} {user.lastName}
               </p>
-              <p className="text-xs text-muted-foreground"> {/* text-muted-foreground pour le rôle/compagnie */}
+              <p className="text-xs text-muted-foreground">
                 {user.role === 'admin' ? 'Administrateur' : user.companyName}
               </p>
             </div>
@@ -58,14 +69,12 @@ const Header = () => {
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className="relative h-10 w-10 rounded-full">
                   <Avatar className="h-10 w-10">
-                    {/* Le dégradé pour l'avatar est fixe, ce qui est acceptable */}
                     <AvatarFallback className="bg-arcadis-gradient text-white font-medium">
                       {userInitials}
                     </AvatarFallback>
                   </Avatar>
                 </Button>
               </DropdownMenuTrigger>
-              {/* MODIFIÉ ICI: Utilisation des variables de thème pour le DropdownMenuContent */}
               <DropdownMenuContent className="w-56 bg-popover border-border text-popover-foreground" align="end" forceMount>
                 <DropdownMenuLabel className="font-normal">
                   <div className="flex flex-col space-y-1">
@@ -101,4 +110,3 @@ const Header = () => {
 };
 
 export default Header;
-    
