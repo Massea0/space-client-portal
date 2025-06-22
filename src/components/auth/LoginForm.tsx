@@ -1,3 +1,4 @@
+// src/components/auth/LoginForm.tsx
 import React, { useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -17,18 +18,19 @@ const LoginForm = () => {
     try {
       await login({ email, password });
     } catch (err) {
-      // Error is handled in AuthContext and displayed via the `error` state
+      // L'erreur est gérée dans AuthContext et affichée via l'état `error`
       console.error("Login failed from form:", err);
     }
   };
 
   return (
+      // La Card n'a plus besoin de sa propre image de logo
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-          <img src="/logo/logo-header.png" alt="Arcadis Technologies" className="mx-auto h-16 w-auto" />
-          <CardTitle className="text-2xl mt-4">Connexion</CardTitle>
+          {/* L'image du logo a été retirée car elle est maintenant dans AuthLayout */}
+          <CardTitle className="text-2xl">Connexion</CardTitle>
           <CardDescription>
-            Accédez à votre portail client Arcadis Space.
+            Accédez à votre espace client.
           </CardDescription>
         </CardHeader>
         <CardContent>

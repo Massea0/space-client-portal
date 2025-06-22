@@ -1,8 +1,5 @@
 // src/types/index.ts
 
-// Réexporter le type User depuis auth.ts
-export type { User } from './auth'; // AJOUTÉ
-
 export interface Company {
   id: string;
   name: string;
@@ -10,21 +7,6 @@ export interface Company {
   phone: string;
   address: string;
   createdAt: Date;
-}
-
-export interface Devis {
-  id: string;
-  number: string;
-  companyId: string;
-  companyName: string;
-  object: string;
-  amount: number;
-  status: 'draft' | 'sent' | 'pending' | 'approved' | 'rejected' | 'expired';
-  createdAt: Date;
-  validUntil: Date;
-  items: DevisItem[];
-  notes?: string;
-  rejectionReason?: string;
 }
 
 export interface DevisItem {
@@ -35,6 +17,22 @@ export interface DevisItem {
   total: number;
 }
 
+export interface Devis {
+  id: string;
+  number: string;
+  companyId: string;
+  companyName: string;
+  object: string;
+  amount: number;
+  status: 'draft' | 'sent' | 'pending' | 'approved' | 'rejected' | 'expired' | 'validated';
+  createdAt: Date;
+  validUntil: Date;
+  items: DevisItem[];
+  notes?: string;
+  rejectionReason?: string;
+  validatedAt?: Date;
+}
+
 export interface InvoiceItem {
   id: string;
   description: string;
@@ -43,39 +41,30 @@ export interface InvoiceItem {
   total: number;
 }
 
-// Statuts des tickets mis à jour pour correspondre à la base de données
-export type TicketStatus =
-    | 'open'
-    | 'in_progress'
-    | 'resolved'
-    | 'closed'
-    | 'pending_admin_response'
-    | 'pending_client_response';
-
-// NOUVEAU: Interface pour les catégories de tickets
-export interface TicketCategory {
-  id: string;
-  name: string;
-  description?: string;
-  createdAt: Date; // Ajouté pour la cohérence
-}
-
-export interface Ticket {
+export interface Invoice {
   id: string;
   number: string;
   companyId: string;
   companyName: string;
-  subject: string;
-  description: string;
-  status: TicketStatus;
-  priority: 'low' | 'medium' | 'high' | 'urgent';
-  categoryId?: string; // ID de la catégorie (optionnel pour l'instant)
-  categoryName?: string; // Nom de la catégorie (pour affichage, via jointure)
+  amount: number;
+  status: 'draft' | 'sent' | 'pending' | 'paid' | 'overdue' | 'cancelled' | 'pending_payment';
   createdAt: Date;
-  updatedAt: Date;
-  assignedTo?: string;
-  messages: TicketMessage[];
-  attachments: TicketAttachment[]; // Gardé pour une future utilisation
+  dueDate: Date;
+  items: InvoiceItem[];
+  paidAt?: Date;
+  notes?: string;
+  dexchangeTransactionId?: string;
+  paymentMethod?: string;
+}
+
+export interface TicketAttachment {
+  id: string;
+  ticketMessageId: string;
+  fileName: string;
+  fileUrl: string;
+  fileType: string;
+  fileSize: number;
+  createdAt: Date;
 }
 
 export interface TicketMessage {
@@ -86,29 +75,30 @@ export interface TicketMessage {
   authorRole: 'client' | 'admin';
   content: string;
   createdAt: Date;
-  attachments: TicketAttachment[]; // Gardé pour une future utilisation
+  attachments: TicketAttachment[];
 }
 
-export interface TicketAttachment {
+export interface TicketCategory {
   id: string;
   name: string;
-  url: string;
-  size: number;
-  type: string;
+  description?: string;
+  createdAt: Date;
 }
 
-export type InvoiceStatus = 'pending' | 'paid' | 'overdue' | 'draft' | 'cancelled';
-
-export interface Invoice {
+export interface Ticket {
   id: string;
   number: string;
   companyId: string;
   companyName: string;
-  amount: number;
-  status: InvoiceStatus;
+  subject: string;
+  description: string;
+  status: 'open' | 'in_progress' | 'pending_client_response' | 'pending_admin_response' | 'resolved' | 'closed';
+  priority: 'low' | 'medium' | 'high' | 'urgent';
+  categoryId?: string;
+  categoryName?: string;
   createdAt: Date;
-  dueDate: Date;
-  paidAt?: Date;
-  items: InvoiceItem[];
-  notes?: string;
+  updatedAt: Date;
+  assignedTo?: string;
+  messages: TicketMessage[];
+  attachments: TicketAttachment[];
 }

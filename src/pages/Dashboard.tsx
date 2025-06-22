@@ -17,13 +17,13 @@ import {
   Eye,
   ClipboardList
 } from 'lucide-react';
-import { useToast } from '@/hooks/useToast';
+import { toast } from 'sonner'; // MODIFIÉ: Import de toast depuis sonner
 import { cn } from '@/lib/utils';
 
 const Dashboard = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const { toast } = useToast();
+  // const { toast } = useToast(); // SUPPRIMÉ: Plus besoin du hook useToast
   const [devisList, setDevisList] = useState<Devis[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [tickets, setTickets] = useState<Ticket[]>([]);
@@ -65,15 +65,13 @@ const Dashboard = () => {
 
     } catch (error) {
       console.error('Error loading dashboard data:', error);
-      toast({
-        title: 'Erreur de chargement',
+      toast.error('Erreur de chargement', { // MODIFIÉ: Appel direct à toast.error
         description: 'Impossible de charger les données du tableau de bord.',
-        variant: 'error',
       });
     } finally {
       setLoading(false);
     }
-  }, [user, toast]);
+  }, [user]);
 
   useEffect(() => {
     loadDashboardData();

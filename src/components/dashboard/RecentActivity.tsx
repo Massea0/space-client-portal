@@ -4,8 +4,9 @@ import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { formatDate } from '@/lib/utils';
-import { Devis, Invoice, Ticket, User } from '@/types'; // User importé pour le type de rôle
-import { FileText, CreditCard, MessageSquare, AlertTriangle, CheckCircle, Clock, Send, XCircle } from 'lucide-react';
+import { Devis, Invoice, Ticket } from '@/types';
+import type { User } from '@/types/auth'; // CORRECTION: Importation depuis le bon fichier
+import { FileText, CreditCard, MessageSquare, AlertTriangle, CheckCircle, Clock, Send, XCircle, ShieldCheck } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface Activity {
@@ -19,10 +20,10 @@ interface Activity {
 
 interface RecentActivityProps {
   activities: Activity[];
-  userRole?: User['role']; // MODIFIÉ ICI: Ajout de userRole
+  userRole?: User['role'];
 }
 
-const RecentActivity: React.FC<RecentActivityProps> = ({ activities, userRole }) => { // userRole ajouté aux props
+const RecentActivity: React.FC<RecentActivityProps> = ({ activities, userRole }) => {
   const navigate = useNavigate();
 
   const getIcon = (type: Activity['type']) => {
@@ -37,8 +38,9 @@ const RecentActivity: React.FC<RecentActivityProps> = ({ activities, userRole })
     let label: string = status.toString();
     let IconComponent: React.ElementType | null = null;
 
-    const statusColors: { [key: string]: string } = { // Clé générique pour couvrir tous les statuts
+    const statusColors: { [key: string]: string } = {
       approved: 'bg-green-500/10 text-green-700 dark:bg-green-500/20 dark:text-green-400',
+      validated: 'bg-indigo-500/10 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-400',
       pending: 'bg-yellow-500/10 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-400',
       rejected: 'bg-red-500/10 text-red-700 dark:bg-red-500/20 dark:text-red-400',
       sent: 'bg-blue-500/10 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400',
@@ -56,12 +58,13 @@ const RecentActivity: React.FC<RecentActivityProps> = ({ activities, userRole })
     };
 
     label = status.charAt(0).toUpperCase() + status.slice(1).replace(/_/g, ' ');
-    variantClass = statusColors[status as string] || variantClass; // Cast status as string for indexing
+    variantClass = statusColors[status as string] || variantClass;
 
     if (type === 'devis') {
       const devisStatus = status as Devis['status'];
       switch (devisStatus) {
         case 'approved': IconComponent = CheckCircle; break;
+        case 'validated': IconComponent = ShieldCheck; break;
         case 'pending': IconComponent = Clock; break;
         case 'rejected': IconComponent = XCircle; break;
         case 'sent': IconComponent = Send; break;
@@ -76,6 +79,7 @@ const RecentActivity: React.FC<RecentActivityProps> = ({ activities, userRole })
         case 'pending': IconComponent = Clock; break;
         case 'overdue': IconComponent = AlertTriangle; break;
         case 'draft': IconComponent = FileText; break;
+        case 'sent': IconComponent = Send; break;
         case 'cancelled': IconComponent = XCircle; break;
         default: IconComponent = CreditCard;
       }
@@ -99,13 +103,12 @@ const RecentActivity: React.FC<RecentActivityProps> = ({ activities, userRole })
     );
   };
 
-  // MODIFIÉ ICI: Logique de navigation basée sur userRole
   const handleActivityClick = (activity: Activity) => {
     if (userRole === 'admin') {
       if (activity.type === 'devis') navigate(`/admin/devis`);
       else if (activity.type === 'invoice') navigate(`/admin/factures`);
       else if (activity.type === 'ticket') navigate(`/admin/support`);
-    } else { // Pour les clients ou si userRole n'est pas défini (fallback)
+    } else {
       if (activity.type === 'devis') navigate(`/devis`);
       else if (activity.type === 'invoice') navigate(`/factures`);
       else if (activity.type === 'ticket') navigate(`/support`);

@@ -9,12 +9,15 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { X, PlusCircle } from 'lucide-react';
 import { Company, Devis as DevisType } from '@/types';
 import { companiesApi } from '@/services/api';
-import { formatDateForInput, cn } from '@/lib/utils';
+import { formatDateForInput, cn, formatCurrency } from '@/lib/utils';
+
+// Import des styles et composants partagés
+import { formStyles as styles } from './FormStyles';
+import { FormCard, FormSection, DeleteItemButton, AddItemButton } from './SharedFormComponents';
 
 // Schéma pour un article de devis
 const devisItemSchema = z.object({
@@ -52,7 +55,6 @@ export type DevisFormValues = z.infer<typeof devisFormSchema>;
 export interface DevisFormSubmitData extends Omit<DevisFormValues, 'validUntil' | 'items'> {
   validUntil: string;
   items: Array<Omit<z.infer<typeof devisItemSchema>, 'id'>>;
-  // status?: DevisType['status']; // Retiré
 }
 
 // --- NumberInputController ---
@@ -175,6 +177,11 @@ const DevisForm: React.FC<DevisFormProps> = ({ onSubmit, onCancel, isLoading, in
 
   const watchedItems = watch("items");
 
+  // Fonction pour calculer le total du devis
+  const calculateTotal = (items: typeof watchedItems) => {
+    return items.reduce((sum, item) => sum + (item.total || 0), 0);
+  };
+
   useEffect(() => {
     watchedItems.forEach((item, index) => {
       const quantity = Number(item.quantity) || 0;
@@ -207,94 +214,89 @@ const DevisForm: React.FC<DevisFormProps> = ({ onSubmit, onCancel, isLoading, in
   };
 
   return (
-      <form onSubmit={handleSubmit(processSubmit)} className="space-y-6 p-1">
+      <form onSubmit={handleSubmit(processSubmit)} className={styles.wrapper}>
         {/* Card Informations Générales */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Informations Générales du Devis</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <Label htmlFor="companyId">Client</Label>
-              <Controller
-                  name="companyId"
-                  control={control}
-                  render={({ field }) => (
-                      <Select onValueChange={field.onChange} value={field.value} disabled={loadingCompanies}>
-                        <SelectTrigger>
-                          <SelectValue placeholder={loadingCompanies ? "Chargement des clients..." : "Sélectionnez un client"} />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {!loadingCompanies && companies.map((company) => (
-                              <SelectItem key={company.id} value={company.id}>
-                                {company.name}
-                              </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                  )}
-              />
-              {errors.companyId && <p className="text-sm text-red-600 mt-1">{errors.companyId.message}</p>}
+        <FormCard
+            title="Informations Générales du Devis"
+            description="Renseignez les informations de base du devis"
+        >
+          <FormSection>
+            <div className={styles.grid}>
+              <div className={styles.inputGroup}>
+                <Label htmlFor="companyId" className={styles.label}>Client</Label>
+                <Controller
+                    name="companyId"
+                    control={control}
+                    render={({ field }) => (
+                        <Select onValueChange={field.onChange} value={field.value} disabled={loadingCompanies}>
+                          <SelectTrigger>
+                            <SelectValue placeholder={loadingCompanies ? "Chargement des clients..." : "Sélectionnez un client"} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {!loadingCompanies && companies.map((company) => (
+                                <SelectItem key={company.id} value={company.id}>
+                                  {company.name}
+                                </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                    )}
+                />
+                {errors.companyId && <p className="text-sm text-red-600 mt-1">{errors.companyId.message}</p>}
+              </div>
+              <div className={styles.inputGroup}>
+                <Label htmlFor="object" className={styles.label}>Objet du Devis</Label>
+                <Input id="object" {...register("object")} placeholder="Ex: Création de site web, Maintenance applicative" />
+                {errors.object && <p className="text-sm text-red-600 mt-1">{errors.object.message}</p>}
+              </div>
+              <div className={styles.inputGroup}>
+                <Label htmlFor="validUntil" className={styles.label}>Valide jusqu'au</Label>
+                <Controller
+                    name="validUntil"
+                    control={control}
+                    render={({ field }) => (
+                        <Input
+                            type="date"
+                            id="validUntil"
+                            value={field.value ? formatDateForInput(field.value) : ''}
+                            onChange={(e) => field.onChange(e.target.value ? new Date(e.target.value) : null)}
+                        />
+                    )}
+                />
+                {errors.validUntil && <p className="text-sm text-red-600 mt-1">{errors.validUntil.message}</p>}
+              </div>
+              <div className={styles.inputGroup}>
+                <Label htmlFor="notes" className={styles.label}>Notes (optionnel)</Label>
+                <Textarea id="notes" {...register("notes")} placeholder="Conditions particulières, informations additionnelles..." rows={3} />
+              </div>
             </div>
-            <div>
-              <Label htmlFor="object">Objet du Devis</Label>
-              <Input id="object" {...register("object")} placeholder="Ex: Création de site web, Maintenance applicative" />
-              {errors.object && <p className="text-sm text-red-600 mt-1">{errors.object.message}</p>}
-            </div>
-            <div>
-              <Label htmlFor="validUntil">Valide jusqu'au</Label>
-              <Controller
-                  name="validUntil"
-                  control={control}
-                  render={({ field }) => (
-                      <Input
-                          type="date"
-                          id="validUntil"
-                          value={field.value ? formatDateForInput(field.value) : ''}
-                          onChange={(e) => field.onChange(e.target.value ? new Date(e.target.value) : null)}
-                      />
-                  )}
-              />
-              {errors.validUntil && <p className="text-sm text-red-600 mt-1">{errors.validUntil.message}</p>}
-            </div>
-            <div>
-              <Label htmlFor="notes">Notes (optionnel)</Label>
-              <Textarea id="notes" {...register("notes")} placeholder="Conditions particulières, informations additionnelles..." rows={3} />
-            </div>
-          </CardContent>
-        </Card>
+          </FormSection>
+        </FormCard>
 
         {/* Card Articles du Devis */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle>Articles du Devis</CardTitle>
-            <Button type="button" variant="outline" size="sm" onClick={handleAddItem} className="flex items-center gap-1">
-              <PlusCircle className="h-4 w-4" /> Ajouter un article
-            </Button>
-          </CardHeader>
-          <CardContent className="space-y-4">
+        <FormCard
+            title="Articles du Devis"
+            description="Ajoutez les articles à inclure dans le devis"
+        >
+          <div className="flex justify-end mb-4">
+            <AddItemButton onClick={handleAddItem} />
+          </div>
+
+          <div className="space-y-4">
             {fields.length === 0 && (
-                <p className="text-sm text-slate-500 text-center py-4">Aucun article ajouté.</p>
+                <p className="text-sm text-muted-foreground text-center py-4">Aucun article ajouté.</p>
             )}
             {fields.map((fieldItem, index) => (
-                <div key={fieldItem.id} className="p-4 border rounded-lg space-y-3 relative bg-card/50 dark:bg-muted/20">
-                  <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="absolute top-2 right-2 text-muted-foreground hover:text-destructive h-7 w-7"
-                      onClick={() => remove(index)}
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
+                <div key={fieldItem.id} className={styles.item}>
+                  <DeleteItemButton onClick={() => remove(index)} />
                   <div className="mb-2">
-                    <Label htmlFor={`items.${index}.description`}>Description de l'article #{index + 1}</Label>
+                    <Label htmlFor={`items.${index}.description`} className={styles.label}>Description de l'article #{index + 1}</Label>
                     <Input id={`items.${index}.description`} {...register(`items.${index}.description`)} placeholder="Description de l'article ou service" />
                     {errors.items?.[index]?.description && <p className="text-sm text-red-600 mt-1">{errors.items?.[index]?.description?.message}</p>}
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    <div>
-                      <Label htmlFor={`items.${index}.quantity`}>Quantité</Label>
+                    <div className={styles.inputGroup}>
+                      <Label htmlFor={`items.${index}.quantity`} className={styles.label}>Quantité</Label>
                       <NumberInputController
                           name={`items.${index}.quantity`}
                           control={control}
@@ -302,8 +304,8 @@ const DevisForm: React.FC<DevisFormProps> = ({ onSubmit, onCancel, isLoading, in
                       />
                       {errors.items?.[index]?.quantity && <p className="text-sm text-red-600 mt-1">{errors.items?.[index]?.quantity?.message}</p>}
                     </div>
-                    <div>
-                      <Label htmlFor={`items.${index}.unitPrice`}>Prix Unitaire (€)</Label>
+                    <div className={styles.inputGroup}>
+                      <Label htmlFor={`items.${index}.unitPrice`} className={styles.label}>Prix Unitaire (FCFA)</Label>
                       <NumberInputController
                           name={`items.${index}.unitPrice`}
                           control={control}
@@ -313,10 +315,10 @@ const DevisForm: React.FC<DevisFormProps> = ({ onSubmit, onCancel, isLoading, in
                       {errors.items?.[index]?.unitPrice && <p className="text-sm text-red-600 mt-1">{errors.items?.[index]?.unitPrice?.message}</p>}
                     </div>
                     <div className="self-end">
-                      <Label>Total Article (€)</Label>
+                      <Label className={styles.label}>Total Article (FCFA)</Label>
                       <Input
                           type="text"
-                          value={watchedItems[index]?.total?.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0,00'}
+                          value={watchedItems[index]?.total !== undefined ? formatCurrency(watchedItems[index].total) : formatCurrency(0)}
                           readOnly
                           disabled
                           className={cn(
@@ -332,10 +334,20 @@ const DevisForm: React.FC<DevisFormProps> = ({ onSubmit, onCancel, isLoading, in
             {errors.items && typeof errors.items.message === 'string' && (
                 <p className="text-sm text-red-600 mt-1">{errors.items.message}</p>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </FormCard>
 
-        <div className="flex justify-end gap-3 pt-4">
+        {/* Section Totaux */}
+        <div className={styles.totalsSection}>
+          <div className="flex justify-between items-center">
+            <span className="font-medium text-foreground">Total du Devis</span>
+            <span className="text-xl font-semibold text-primary">
+            {formatCurrency(calculateTotal(watchedItems))}
+          </span>
+          </div>
+        </div>
+
+        <div className={styles.buttonsWrapper}>
           <Button type="button" variant="outline" onClick={onCancel} disabled={isLoading}>
             Annuler
           </Button>

@@ -1,7 +1,7 @@
 // src/pages/admin/AdminDevis.tsx
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { devisApi } from '@/services/api';
+import { devisApi, invoicesApi } from '@/services/api'; // Ajout de invoicesApi
 import { Devis as DevisType } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -16,23 +16,23 @@ import {
   DialogTitle,
   DialogDescription,
   DialogFooter,
-  DialogClose,
   DialogTrigger
 } from "@/components/ui/dialog";
-import { formatDate, formatCurrency } from '@/lib/utils';
-import { useToast } from '@/hooks/useToast';
+import { formatDate, formatCurrency, cn } from '@/lib/utils';
+import { toast } from 'sonner'; // MODIFIÉ: Import de toast depuis sonner
 import { downloadDevisPdf } from '@/lib/pdfGenerator';
 import {
   Download, CheckCircle, XCircle, Search as SearchIcon, Plus, Filter,
-  Eye, FileText, Edit, MessageSquare, Clock, AlertTriangle, Send, Archive
-  // ExternalLink retiré des imports car plus utilisé ici
+  FileText, Clock, AlertTriangle, Send, Archive, ShieldCheck, RefreshCw // Ajout de RefreshCw
 } from 'lucide-react';
 import DevisForm, { DevisFormSubmitData } from '@/components/forms/DevisForm';
+import { Label } from '@/components/ui/label'; // Assurez-vous que Label est bien importé ici
 
 const AdminDevisPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { toast } = useToast();
+  // const { toast } = useToast(); // SUPPRIMÉ: Plus besoin du hook useToast
+
   const [devisList, setDevisList] = useState<DevisType[]>([]);
   const [filteredDevis, setFilteredDevis] = useState<DevisType[]>([]);
   const [loading, setLoading] = useState(true);
@@ -60,20 +60,22 @@ const AdminDevisPage = () => {
       sent: 'bg-blue-100 text-blue-800 dark:bg-blue-700 dark:text-blue-200',
       pending: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-600 dark:text-yellow-100',
       approved: 'bg-green-100 text-green-800 dark:bg-green-700 dark:text-green-100',
+      validated: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-700 dark:text-indigo-100', // Couleur pour 'validated'
       rejected: 'bg-red-100 text-red-800 dark:bg-red-700 dark:text-red-100',
       expired: 'bg-orange-100 text-orange-800 dark:bg-orange-600 dark:text-orange-100',
     };
     const labels: { [key in DevisType['status']]: string } = {
       draft: 'Brouillon', sent: 'Envoyé', pending: 'En attente',
-      approved: 'Approuvé', rejected: 'Rejeté', expired: 'Expiré',
+      approved: 'Approuvé', validated: 'Facturé', rejected: 'Rejeté', expired: 'Expiré',
     };
+
     const icons: { [key in DevisType['status']]: React.ElementType } = {
       draft: Clock, sent: Send, pending: Clock,
-      approved: CheckCircle, rejected: XCircle, expired: AlertTriangle,
+      approved: CheckCircle, validated: ShieldCheck, rejected: XCircle, expired: AlertTriangle,
     };
     const Icon = icons[status] || Filter;
     return (
-        <Badge className={`${variants[status] || 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'} text-xs whitespace-nowrap flex items-center gap-1`}>
+        <Badge className={cn(variants[status] || 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200', 'text-xs whitespace-nowrap flex items-center gap-1')}>
           <Icon className="h-3 w-3" />
           {labels[status] || status}
         </Badge>
@@ -87,12 +89,12 @@ const AdminDevisPage = () => {
       setDevisList(data);
     } catch (error) {
       console.error("[AdminDevisPage] Erreur lors du chargement des devis:", error);
-      toast({ title: 'Erreur', description: 'Impossible de charger la liste des devis.', variant: 'error' });
+      toast.error('Erreur', { description: 'Impossible de charger la liste des devis.' }); // MODIFIÉ: Appel direct à toast.error
       setDevisList([]);
     } finally {
       setLoading(false);
     }
-  }, [toast]);
+  }, []);
 
   useEffect(() => {
     fetchAllDevis();
@@ -117,16 +119,35 @@ const AdminDevisPage = () => {
     setActionLoading(id);
     try {
       await devisApi.updateStatus(id, status, reason);
-      toast({ title: 'Succès', description: `Statut du devis mis à jour.`, variant: 'success' });
+      toast.success('Succès', { description: `Statut du devis mis à jour.` }); // MODIFIÉ: Appel direct à toast.success
       fetchAllDevis();
     } catch (error) {
       console.error("[AdminDevisPage] Erreur lors de la mise à jour du statut:", error);
-      toast({ title: 'Erreur', description: 'Impossible de mettre à jour le statut.', variant: 'error' });
+      toast.error('Erreur', { description: 'Impossible de mettre à jour le statut.' }); // MODIFIÉ: Appel direct à toast.error
     } finally {
       setActionLoading(null);
       setIsRejectionDialogOpen(false);
       setRejectionReason('');
       setDevisToUpdate(null);
+    }
+  };
+
+  // NOUVEAU: Handler pour la conversion en facture
+  const handleConvertToInvoice = async (devisId: string, devisNumber: string) => {
+    setActionLoading(`convert-${devisId}`);
+    try {
+      const newInvoice = await invoicesApi.createFromDevis(devisId);
+      toast.success('Conversion Réussie', { // MODIFIÉ: Appel direct à toast.success
+        description: `Le devis N°${devisNumber} a été converti en facture N°${newInvoice.number}.`,
+      });
+      // Rafraîchir la liste pour mettre à jour le statut du devis converti
+      fetchAllDevis();
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Une erreur inconnue est survenue.';
+      console.error("[AdminDevisPage] Erreur lors de la conversion en facture:", error);
+      toast.error('Erreur de Conversion', { description: errorMessage }); // MODIFIÉ: Appel direct à toast.error
+    } finally {
+      setActionLoading(null);
     }
   };
 
@@ -147,7 +168,7 @@ const AdminDevisPage = () => {
       await downloadDevisPdf(devis);
     } catch (error) {
       console.error("[AdminDevisPage] Erreur PDF:", error);
-      toast({ title: 'Erreur PDF', description: 'Impossible de générer le PDF.', variant: 'error' });
+      toast.error('Erreur PDF', { description: 'Impossible de générer le PDF.' }); // MODIFIÉ: Appel direct à toast.error
     } finally {
       setActionLoading(null);
     }
@@ -158,7 +179,7 @@ const AdminDevisPage = () => {
     try {
       const validUntilDate = new Date(data.validUntil);
       if (isNaN(validUntilDate.getTime())) {
-        toast({ title: 'Erreur de Validation', description: 'La date de validité fournie est invalide.', variant: 'error' });
+        toast.error('Erreur de Validation', { description: 'La date de validité fournie est invalide.' }); // MODIFIÉ: Appel direct à toast.error
         setIsSubmittingDevis(false);
         return;
       }
@@ -176,29 +197,21 @@ const AdminDevisPage = () => {
         })),
       };
       const newDevis = await devisApi.create(payloadForApi);
-      toast({
-        title: `Devis Créé`,
+      toast.success(`Devis Créé`, { // MODIFIÉ: Appel direct à toast.success
         description: `Le devis N°${newDevis.number} a été créé avec succès.`,
-        variant: 'success',
       });
       setIsCreateDevisDialogOpen(false);
       fetchAllDevis();
     } catch (error: unknown) {
       console.error("[AdminDevisPage_Dialog] Erreur lors de la création du devis:", error);
       const errorMessage = error instanceof Error ? error.message : 'Une erreur est survenue lors de la création du devis.';
-      toast({ title: 'Erreur de Création', description: errorMessage, variant: 'error' });
+      toast.error('Erreur de Création', { description: errorMessage }); // MODIFIÉ: Appel direct à toast.error
     } finally {
       setIsSubmittingDevis(false);
     }
   };
 
-  // handleOpenInNewPage retiré car le bouton est supprimé
-  // const handleOpenInNewPage = () => {
-  //   setIsCreateDevisDialogOpen(false);
-  //   navigate('/admin/devis/creer');
-  // };
-
-  const availableStatuses: DevisType['status'][] = ['draft', 'sent', 'pending', 'approved', 'rejected', 'expired'];
+  const availableStatuses: DevisType['status'][] = ['draft', 'sent', 'pending', 'approved', 'validated', 'rejected', 'expired'];
 
   if (loading && devisList.length === 0) {
     return (
@@ -225,7 +238,6 @@ const AdminDevisPage = () => {
               </Button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto">
-              {/* DialogHeader simplifié, bouton ExternalLink retiré */}
               <DialogHeader>
                 <DialogTitle>Créer un Nouveau Devis</DialogTitle>
                 <DialogDescription>
@@ -241,35 +253,34 @@ const AdminDevisPage = () => {
           </Dialog>
         </div>
 
-        <Card>
-          <CardContent className="p-4 space-y-4 md:space-y-0 md:flex md:items-center md:justify-between md:gap-4">
-            <div className="relative w-full md:flex-1">
-              <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-              <Input
-                  placeholder="Rechercher par N°, client, objet..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10 w-full"
-              />
-            </div>
-            <div className="flex items-center gap-2 w-full md:w-auto">
-              <Filter className="h-4 w-4 text-muted-foreground hidden md:inline-block" />
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-full md:w-[200px]">
-                  <SelectValue placeholder="Filtrer par statut" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Tous les statuts</SelectItem>
-                  {availableStatuses.map(status => (
-                      <SelectItem key={status} value={status} className="capitalize">
-                        {status.charAt(0).toUpperCase() + status.slice(1).replace('_', ' ')}
-                      </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </CardContent>
-        </Card>
+        {/* MODIFIÉ: Remplacé Card par un simple div pour la barre de recherche et les filtres */}
+        <div className="flex flex-col md:flex-row items-center justify-between gap-4 p-2">
+          <div className="relative w-full md:flex-1">
+            <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+            <Input
+                placeholder="Rechercher par N°, client, objet..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10 w-full"
+            />
+          </div>
+          <div className="flex items-center gap-2 w-full md:w-auto">
+            <Filter className="h-4 w-4 text-muted-foreground hidden md:inline-block" />
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="w-full md:w-[200px]">
+                <SelectValue placeholder="Filtrer par statut" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Tous les statuts</SelectItem>
+                {availableStatuses.map(status => (
+                    <SelectItem key={status} value={status} className="capitalize">
+                      {status.charAt(0).toUpperCase() + status.slice(1).replace('_', ' ')}
+                    </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
 
         {filteredDevis.length === 0 && !loading ? (
             <Card>
@@ -343,6 +354,18 @@ const AdminDevisPage = () => {
                       {devis.status !== 'expired' && devis.status !== 'approved' && devis.status !== 'rejected' && (
                           <Button variant="outline" size="sm" onClick={() => handleUpdateStatus(devis.id, 'expired')} disabled={actionLoading === devis.id} className="flex items-center gap-1.5">
                             <AlertTriangle className="mr-2 h-3.5 w-3.5" /> Marquer comme Expiré
+                          </Button>
+                      )}
+                      {/* NOUVEAU: Bouton de conversion */}
+                      {devis.status === 'approved' && (
+                          <Button
+                              size="sm"
+                              onClick={() => handleConvertToInvoice(devis.id, devis.number)}
+                              disabled={actionLoading === `convert-${devis.id}`}
+                              className="bg-indigo-600 hover:bg-indigo-700 text-white"
+                          >
+                            <RefreshCw className="mr-2 h-3.5 w-3.5" />
+                            {actionLoading === `convert-${devis.id}` ? 'Conversion...' : 'Convertir en Facture'}
                           </Button>
                       )}
                     </CardFooter>

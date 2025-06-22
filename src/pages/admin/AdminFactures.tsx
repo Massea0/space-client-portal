@@ -1,8 +1,8 @@
 // src/pages/admin/AdminFactures.tsx
 import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom'; // useLocation AJOUTÉ
+import { useNavigate, useLocation } from 'react-router-dom';
 import { invoicesApi } from '@/services/api';
-import { Invoice as InvoiceType, InvoiceItem } from '@/types';
+import { Invoice as InvoiceType } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -17,18 +17,17 @@ import {
   DialogTrigger
 } from "@/components/ui/dialog";
 import { formatDate, formatCurrency } from '@/lib/utils';
-import { useToast } from '@/hooks/useToast';
+import { toast } from 'sonner';
 import { downloadInvoicePdf } from '@/lib/pdfGenerator';
 import {
-  Download, CheckCircle, XCircle, Search as SearchIcon, Plus, Filter, Eye,
-  CreditCard, Building, Calendar, Euro
+  Download, CheckCircle, Search as SearchIcon, Plus, Filter, Eye,
+  CreditCard, Building, Calendar, Send, Banknote // MODIFIÉ: Remplacé Euro par Banknote
 } from 'lucide-react';
 import FactureForm, { FactureFormSubmitData } from '@/components/forms/FactureForm';
 
 const AdminFactures = () => {
   const navigate = useNavigate();
-  const location = useLocation(); // AJOUTÉ
-  const { toast } = useToast();
+  const location = useLocation();
   const [invoiceList, setInvoiceList] = useState<InvoiceType[]>([]);
   const [filteredInvoices, setFilteredInvoices] = useState<InvoiceType[]>([]);
   const [loading, setLoading] = useState(true);
@@ -40,11 +39,9 @@ const AdminFactures = () => {
   const [isCreateFactureDialogOpen, setIsCreateFactureDialogOpen] = useState(false);
   const [isSubmittingFacture, setIsSubmittingFacture] = useState(false);
 
-  // AJOUTÉ: useEffect pour gérer l'ouverture du dialogue de création
   useEffect(() => {
     if (location.state?.openCreateFactureDialog) {
       setIsCreateFactureDialogOpen(true);
-      // Nettoyer l'état de la navigation pour éviter la réouverture
       navigate(location.pathname, { replace: true, state: {} });
     }
   }, [location.state, navigate, location.pathname]);
@@ -56,15 +53,13 @@ const AdminFactures = () => {
       const data = await invoicesApi.getAll();
       setInvoiceList(data);
     } catch (error) {
-      toast({
-        title: 'Erreur',
-        description: 'Impossible de charger les factures',
-        variant: 'error'
+      toast.error('Erreur', {
+        description: 'Impossible de charger les factures'
       });
     } finally {
       setLoading(false);
     }
-  }, [toast]);
+  }, []);
 
   useEffect(() => {
     loadInvoices();
@@ -85,23 +80,41 @@ const AdminFactures = () => {
   }, [searchTerm, statusFilter, invoiceList]);
 
   const handleMarkAsPaid = async (id: string) => {
+    setActionLoading(`paid-${id}`);
     try {
-      setActionLoading(id);
       const updatedInvoice = await invoicesApi.updateStatus(id, 'paid');
       await loadInvoices();
       if (selectedInvoice && selectedInvoice.id === id) {
         setSelectedInvoice(updatedInvoice);
       }
-      toast({
-        title: 'Succès',
-        description: 'Facture marquée comme payée',
-        variant: 'success'
+      toast.success('Succès', {
+        description: 'Facture marquée comme payée'
       });
     } catch (error) {
-      toast({
-        title: 'Erreur',
-        description: 'Impossible de mettre à jour la facture',
-        variant: 'error'
+      toast.error('Erreur', {
+        description: 'Impossible de mettre à jour la facture'
+      });
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  // NOUVELLE FONCTION: Finaliser et envoyer une facture brouillon
+  const handleFinalizeInvoice = async (id: string) => {
+    setActionLoading(`finalize-${id}`);
+    try {
+      // Met à jour le statut de 'draft' à 'pending'
+      const updatedInvoice = await invoicesApi.updateStatus(id, 'pending');
+      await loadInvoices();
+      if (selectedInvoice && selectedInvoice.id === id) {
+        setSelectedInvoice(updatedInvoice);
+      }
+      toast.success('Succès', {
+        description: 'La facture a été finalisée et est maintenant en attente.'
+      });
+    } catch (error) {
+      toast.error('Erreur', {
+        description: 'Impossible de finaliser la facture.'
       });
     } finally {
       setActionLoading(null);
@@ -111,16 +124,12 @@ const AdminFactures = () => {
   const handleCreateFactureSubmitInDialog = async (data: FactureFormSubmitData) => {
     setIsSubmittingFacture(true);
     try {
-      console.log("[AdminFacturesPage_Dialog] Données du formulaire reçues:", data);
-
       const issueDateObj = new Date(data.issueDate);
       const dueDateObj = new Date(data.dueDate);
 
       if (isNaN(issueDateObj.getTime()) || isNaN(dueDateObj.getTime())) {
-        toast({
-          title: 'Erreur de Validation',
+        toast.error('Erreur de Validation', {
           description: 'Les dates fournies (émission ou échéance) sont invalides.',
-          variant: 'error',
         });
         setIsSubmittingFacture(false);
         return;
@@ -129,7 +138,7 @@ const AdminFactures = () => {
       const payloadForApi = {
         companyId: data.companyId,
         amount: data.items.reduce((sum, item) => sum + (Number(item.quantity) * Number(item.unitPrice)), 0),
-        status: 'pending' as InvoiceType['status'], // Ou 'draft' si vous préférez
+        status: 'draft' as InvoiceType['status'], // MODIFIÉ: Créer en tant que brouillon
         dueDate: dueDateObj,
         notes: data.notes,
         items: data.items.map(item => ({
@@ -139,26 +148,20 @@ const AdminFactures = () => {
         })),
       };
 
-      console.log("[AdminFacturesPage_Dialog] Payload envoyé à l'API:", payloadForApi);
       const newFacture = await invoicesApi.create(payloadForApi);
 
-      toast({
-        title: 'Facture Créée',
-        description: `La facture N°${newFacture.number} a été créée avec succès.`,
-        variant: 'success',
+      toast.success('Facture Créée', {
+        description: `La facture N°${newFacture.number} a été créée en tant que brouillon.`,
       });
-      setIsCreateFactureDialogOpen(false); // Fermer le dialogue
-      loadInvoices(); // Recharger la liste
+      setIsCreateFactureDialogOpen(false);
+      loadInvoices();
     } catch (error: unknown) {
-      console.error("[AdminFacturesPage_Dialog] Erreur lors de la création de la facture:", error);
       let errorMessage = 'Une erreur est survenue lors de la création de la facture.';
       if (error instanceof Error) {
         errorMessage = error.message;
       }
-      toast({
-        title: 'Erreur de Création',
+      toast.error('Erreur de Création', {
         description: errorMessage,
-        variant: 'error',
       });
     } finally {
       setIsSubmittingFacture(false);
@@ -186,11 +189,9 @@ const AdminFactures = () => {
     try {
       await downloadInvoicePdf(invoice);
     } catch (error) {
-      console.error("Error generating Invoice PDF:", error);
-      toast({
-        title: 'Erreur PDF',
+      console.error("Erreur lors de la génération du PDF de la facture:", error);
+      toast.error('Erreur PDF', {
         description: 'Impossible de générer le PDF pour la facture.',
-        variant: 'error'
       });
     }
   };
@@ -238,35 +239,34 @@ const AdminFactures = () => {
           </Dialog>
         </div>
 
-        <Card>
-          <CardContent className="p-4 space-y-4 md:space-y-0 md:flex md:items-center md:justify-between md:gap-4">
-            <div className="relative w-full md:flex-1">
-              <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 h-4 w-4" />
-              <Input
-                  placeholder="Rechercher par N°, client..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10 w-full"
-              />
-            </div>
-            <div className="flex items-center gap-2 w-full md:w-auto">
-              <Filter className="h-4 w-4 text-slate-500 hidden md:inline-block" />
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-full md:w-[200px]">
-                  <SelectValue placeholder="Filtrer par statut" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Tous les statuts</SelectItem>
-                  {availableStatuses.map(status => (
-                      <SelectItem key={status} value={status} className="capitalize">
-                        {status.charAt(0).toUpperCase() + status.slice(1).replace('_', ' ')}
-                      </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </CardContent>
-        </Card>
+        {/* MODIFIÉ: Remplacé Card par un simple div pour la barre de recherche et les filtres */}
+        <div className="flex flex-col md:flex-row items-center justify-between gap-4 p-2">
+          <div className="relative w-full md:flex-1">
+            <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 h-4 w-4" />
+            <Input
+                placeholder="Rechercher par N°, client..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10 w-full"
+            />
+          </div>
+          <div className="flex items-center gap-2 w-full md:w-auto">
+            <Filter className="h-4 w-4 text-slate-500 hidden md:inline-block" />
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="w-full md:w-[200px]">
+                <SelectValue placeholder="Filtrer par statut" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Tous les statuts</SelectItem>
+                {availableStatuses.map(status => (
+                    <SelectItem key={status} value={status} className="capitalize">
+                      {status.charAt(0).toUpperCase() + status.slice(1).replace('_', ' ')}
+                    </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
 
         <div className="grid gap-6">
           {filteredInvoices.map((invoice) => (
@@ -293,25 +293,40 @@ const AdminFactures = () => {
                           <span>Échéance: {formatDate(new Date(invoice.dueDate))}</span>
                         </div>
                         <div className="flex items-center gap-1">
-                          <Euro className="h-4 w-4" />
+                          <Banknote className="h-4 w-4" /> {/* MODIFIÉ: Utilisation de Banknote */}
                           <span className="font-medium">{formatCurrency(invoice.amount)}</span>
                         </div>
                       </div>
                     </div>
 
                     <div className="flex items-center gap-2 mt-2 sm:mt-0">
-                      {getStatusBadge(invoice.status)}
+                      {/* ACTION: Finaliser et Envoyer (pour les brouillons) */}
+                      {invoice.status === 'draft' && (
+                          <Button
+                              size="sm"
+                              onClick={() => handleFinalizeInvoice(invoice.id)}
+                              disabled={actionLoading === `finalize-${invoice.id}`}
+                              className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white"
+                          >
+                            <Send className="h-4 w-4" />
+                            {actionLoading === `finalize-${invoice.id}` ? 'Envoi...' : 'Finaliser et Envoyer'}
+                          </Button>
+                      )}
+
+                      {/* ACTION: Marquer payée (pour les factures en attente) */}
                       {invoice.status === 'pending' && (
                           <Button
                               size="sm"
                               onClick={() => handleMarkAsPaid(invoice.id)}
-                              disabled={actionLoading === invoice.id}
+                              disabled={actionLoading === `paid-${invoice.id}`}
                               className="flex items-center gap-1.5 bg-green-600 hover:bg-green-700"
                           >
                             <CheckCircle className="h-4 w-4" />
-                            {actionLoading === invoice.id ? 'En cours...' : 'Marquer payée'}
+                            {actionLoading === `paid-${invoice.id}` ? 'En cours...' : 'Marquer payée'}
                           </Button>
                       )}
+
+                      {/* ACTION: Télécharger PDF (toujours visible) */}
                       <Button
                           variant="outline"
                           size="sm"
@@ -321,6 +336,8 @@ const AdminFactures = () => {
                         <Download className="h-4 w-4" />
                         PDF
                       </Button>
+
+                      {/* ACTION: Voir détails (toujours visible) */}
                       <Dialog onOpenChange={(open) => !open && setSelectedInvoice(null)}>
                         <DialogTrigger asChild>
                           <Button
@@ -398,6 +415,7 @@ const AdminFactures = () => {
               </Card>
           ))}
         </div>
+
 
         {filteredInvoices.length === 0 && !loading && (
             <Card>

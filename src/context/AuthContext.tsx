@@ -1,314 +1,195 @@
-// src/context/AuthContext.tsx
-import React, {
-    createContext,
-    useContext,
-    useState,
-    useEffect,
-    useRef,
-} from 'react';
+// /Users/a00/myspace/src/context/AuthContext.tsx
+import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import { User, LoginCredentials, AuthContextType } from '@/types/auth';
 import { supabase } from '@/lib/supabaseClient';
-import { AuthError, PostgrestError, Session } from '@supabase/supabase-js';
-
-// Define a more specific type for Supabase query responses
-interface SupabaseQueryDataResponse<DataType> {
-    data: DataType | null;
-    error: PostgrestError | null;
-    status: number;
-    count: number | null;
-    statusText: string;
-}
+import { AuthError, Session } from '@supabase/supabase-js';
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const SUPABASE_REQUEST_TIMEOUT = 15000;
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
-async function supabaseRequestWithTimeout<T>(
-    builderFn: () => Promise<SupabaseQueryDataResponse<T>>,
-    timeoutMs: number = SUPABASE_REQUEST_TIMEOUT
-): Promise<SupabaseQueryDataResponse<T>> {
-    let timeoutHandle: NodeJS.Timeout | undefined;
-
-    const timeoutPromise = new Promise<never>((_, reject) => {
-        timeoutHandle = setTimeout(() => {
-            console.error(
-                `[AuthContext] Supabase request timed out after ${timeoutMs}ms`
-            );
-            reject(new Error(`Supabase request timed out after ${timeoutMs}ms`));
-        }, timeoutMs);
-    });
-
-    try {
-        const result = await Promise.race([builderFn(), timeoutPromise]);
-        if (timeoutHandle) {
-            clearTimeout(timeoutHandle);
-        }
-        return result;
-    } catch (err: unknown) {
-        if (timeoutHandle) {
-            clearTimeout(timeoutHandle);
-        }
-        console.error('[AuthContext] Supabase request failed or timed out:', err);
-        if (err instanceof Error) {
-            throw err;
-        } else if (typeof err === 'object' && err !== null && 'message' in err) {
-            throw new Error(String((err as { message: string }).message));
-        } else {
-            throw new Error('An unknown error occurred in Supabase request');
-        }
-    }
+interface CachedUser {
+    data: User;
+    timestamp: number;
 }
 
-export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
-                                                                          children,
-                                                                      }) => {
+interface UserProfileDb {
+    id: string;
+    email: string;
+    first_name: string;
+    last_name: string;
+    role: 'client' | 'admin';
+    company_id?: string;
+    phone?: string;
+    created_at: string;
+    is_active: boolean;
+    deleted_at?: string | null;
+    companies?: { name: string } | null;
+}
+
+export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [user, setUser] = useState<User | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState('');
 
-    const lastSuccessfullyFetchedUserIdRef = useRef<string | null>(null);
-    const activeSupabaseSessionRef = useRef<Session | null | undefined>(undefined);
+    const userProfileCache = useRef<Map<string, CachedUser>>(new Map());
 
-    const fetchFullUserProfile = async (
-        sessionUser: Session['user']
-    ): Promise<User | null> => {
+    const fetchFullUserProfile = useCallback(async (sessionUser: Session['user']): Promise<User | null> => {
+        const now = Date.now();
+        const cachedProfile = userProfileCache.current.get(sessionUser.id);
+
+        if (cachedProfile && (now - cachedProfile.timestamp) < CACHE_DURATION) {
+            return cachedProfile.data;
+        }
+
         try {
-            type UserProfileDb = {
-                id: string;
-                email: string;
-                first_name: string;
-                last_name: string;
-                role: 'client' | 'admin';
-                company_id?: string;
-                phone?: string;
-                created_at: string;
-                is_active: boolean;
-                deleted_at?: string | null;
-                companies?: { name: string } | null;
-            };
-            const { data: userProfile, error: profileError } =
-                await supabaseRequestWithTimeout<UserProfileDb>(async () =>
-                    supabase.from('users').select('*, companies(name)').eq('id', sessionUser.id).single()
-                );
+            const { data: userProfile, error: profileError } = await supabase
+                .from('users')
+                .select('*, companies(name)')
+                .eq('id', sessionUser.id)
+                .single();
 
             if (profileError) {
-                console.error('[AuthContext] fetchFullUserProfile: Error fetching profile:', profileError.message);
+                console.error('[AuthContext] Error fetching profile:', profileError.message);
                 return null;
             }
+
             if (userProfile) {
-                const companyName = userProfile.companies?.name;
-                return {
+                const typedProfile = userProfile as UserProfileDb;
+                const mappedUser: User = {
                     id: sessionUser.id,
-                    email: userProfile.email || sessionUser.email || '',
-                    firstName: userProfile.first_name,
-                    lastName: userProfile.last_name,
-                    role: userProfile.role,
-                    companyId: userProfile.company_id,
-                    phone: userProfile.phone,
-                    companyName: companyName,
-                    createdAt: new Date(userProfile.created_at),
-                    isActive: userProfile.is_active,
-                    deletedAt: userProfile.deleted_at ? new Date(userProfile.deleted_at) : null,
+                    email: typedProfile.email || sessionUser.email || '',
+                    firstName: typedProfile.first_name,
+                    lastName: typedProfile.last_name,
+                    role: typedProfile.role,
+                    companyId: typedProfile.company_id,
+                    phone: typedProfile.phone,
+                    companyName: typedProfile.companies?.name,
+                    isActive: typedProfile.is_active,
+                    deletedAt: typedProfile.deleted_at ? new Date(typedProfile.deleted_at) : null,
                 };
+
+                userProfileCache.current.set(sessionUser.id, {
+                    data: mappedUser,
+                    timestamp: now
+                });
+
+                return mappedUser;
             }
-            console.warn('[AuthContext] fetchFullUserProfile: Profile not found for ID:', sessionUser.id);
             return null;
         } catch (e) {
-            console.error('[AuthContext] fetchFullUserProfile: Exception:', e);
+            console.error('[AuthContext] fetchFullUserProfile:', e);
             return null;
         }
-    };
+    }, []);
 
     useEffect(() => {
-        console.log('[AuthContext] Initializing AuthProvider.');
+        let mounted = true;
         setIsLoading(true);
-        activeSupabaseSessionRef.current = undefined;
-        lastSuccessfullyFetchedUserIdRef.current = null;
 
-        const { data: authListener } = supabase.auth.onAuthStateChange(
-            async (event, currentSupabaseSession) => {
-                activeSupabaseSessionRef.current = currentSupabaseSession;
-                console.log(
-                    '[AuthContext] onAuthStateChange. Event:', event,
-                    'Session User ID:', currentSupabaseSession?.user?.id
-                );
+        const processSession = async (session: Session | null) => {
+            if (!mounted) return;
 
-                if (event === 'SIGNED_OUT') {
-                    setUser(null);
-                    lastSuccessfullyFetchedUserIdRef.current = null;
-                    setIsLoading(false);
-                    return;
-                }
-                if (event === 'PASSWORD_RECOVERY') {
-                    if (isLoading) setIsLoading(false);
-                    return;
-                }
-
-                if (currentSupabaseSession?.user) {
-                    const supabaseUserId = currentSupabaseSession.user.id;
-                    let shouldFetchProfile = false;
-
-                    if (event === 'INITIAL_SESSION' || event === 'USER_UPDATED' || lastSuccessfullyFetchedUserIdRef.current !== supabaseUserId) {
-                        shouldFetchProfile = true;
-                    } else if ((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') && lastSuccessfullyFetchedUserIdRef.current === supabaseUserId) {
-                        console.log(`[AuthContext] Event: ${event}. User ${supabaseUserId} already loaded. Skipping profile re-fetch.`);
-                        shouldFetchProfile = false;
-                        if (isLoading) setIsLoading(false);
-                    } else {
-                        shouldFetchProfile = true;
-                    }
-
-                    if (shouldFetchProfile) {
-                        console.log(`[AuthContext] Fetching profile for ${supabaseUserId} (Event: ${event})`);
-                        setIsLoading(true);
-                        try {
-                            const fetchedUser = await fetchFullUserProfile(currentSupabaseSession.user);
-                            if (fetchedUser && (!fetchedUser.isActive || fetchedUser.deletedAt)) {
-                                const reason = fetchedUser.deletedAt ? "in trash" : "inactive";
-                                console.warn(`[AuthContext] User ${supabaseUserId} is ${reason}. Forcing sign out.`);
-                                await supabase.auth.signOut();
-                                setUser(null);
-                                lastSuccessfullyFetchedUserIdRef.current = null;
-                                setError(fetchedUser.deletedAt ? 'Your account has been deleted.' : 'Your account has been disabled. Please contact an administrator.');
-                            } else {
-                                setUser(fetchedUser);
-                                if (fetchedUser) {
-                                    lastSuccessfullyFetchedUserIdRef.current = supabaseUserId;
-                                }
-                                setError('');
-                            }
-                        } catch (e) {
-                            console.error(`[AuthContext] Profile fetch exception for ${supabaseUserId}:`, e);
-                            setUser(null);
-                        } finally {
-                            setIsLoading(false);
-                        }
-                    }
-                } else {
-                    setUser(null);
-                    lastSuccessfullyFetchedUserIdRef.current = null;
-                    setIsLoading(false);
-                }
+            if (!session?.user) {
+                setUser(null);
+                setError('');
+                setIsLoading(false);
+                return;
             }
-        );
 
-        // MODIFIED: Simplified fallback initialization logic
-        const initializeSession = async () => {
-            if (activeSupabaseSessionRef.current === undefined) {
-                console.log('[AuthContext] initializeSession: Manually checking session as a fallback.');
-                try {
-                    const { data: { session } } = await supabase.auth.getSession();
-                    if (!session) {
-                        setIsLoading(false);
-                        lastSuccessfullyFetchedUserIdRef.current = null;
-                    }
-                } catch (e) {
-                    console.error('[AuthContext] initializeSession: Exception:', e);
+            try {
+                const fetchedUser = await fetchFullUserProfile(session.user);
+                if (!mounted) return;
+
+                if (fetchedUser && (!fetchedUser.isActive || fetchedUser.deletedAt)) {
+                    await supabase.auth.signOut();
+                    setError(fetchedUser.deletedAt ? 'Votre compte a été supprimé.' : 'Votre compte a été désactivé.');
+                    // Le signOut déclenchera onAuthStateChange qui nettoiera l'état.
+                } else {
+                    setUser(fetchedUser);
+                    setError('');
+                    setIsLoading(false);
+                }
+            } catch (e) {
+                console.error('[AuthContext] Error processing session:', e);
+                if (mounted) {
+                    setUser(null);
+                    setError('Impossible de traiter la session utilisateur.');
                     setIsLoading(false);
                 }
             }
         };
 
-        // MODIFIED: Safer timeout logic to prevent race conditions
-        const initTimer = setTimeout(() => {
-            // This fallback only runs if the onAuthStateChange listener has not yet
-            // fired. This handles edge cases where the listener is slow or fails,
-            // preventing the app from being stuck in a loading state.
-            if (activeSupabaseSessionRef.current === undefined) {
-                initializeSession();
-            }
-        }, 1500); // Increased delay for more stability
+        // Vérifie la session au chargement initial. Crucial pour les nouveaux onglets.
+        supabase.auth.getSession().then(({ data: { session } }) => {
+            processSession(session);
+        });
 
+        // Écoute les changements d'état d'authentification futurs.
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+            processSession(session);
+        });
 
         return () => {
-            console.log('[AuthContext] Unsubscribing from onAuthStateChange.');
-            authListener?.subscription.unsubscribe();
-            clearTimeout(initTimer);
+            mounted = false;
+            subscription?.unsubscribe();
         };
-    }, []);
+    }, [fetchFullUserProfile]);
 
     const login = async (credentials: LoginCredentials): Promise<void> => {
         setIsLoading(true);
         setError('');
         try {
-            const { data: signInData, error: signInError } =
-                await supabase.auth.signInWithPassword({
-                    email: credentials.email,
-                    password: credentials.password,
-                });
+            const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword(credentials);
 
-            if (signInError) {
-                setError(signInError.message || 'Login failed');
-                setIsLoading(false);
-                throw signInError;
-            }
+            if (signInError) throw signInError;
 
             if (signInData.user) {
+                // Pré-vérification du profil pour une réactivité immédiate en cas de compte inactif.
                 const fetchedUser = await fetchFullUserProfile(signInData.user);
-
                 if (fetchedUser && (!fetchedUser.isActive || fetchedUser.deletedAt)) {
                     await supabase.auth.signOut();
-                    const inactiveErrorMsg = fetchedUser.deletedAt ? 'Your account has been deleted.' : 'Your account has been disabled. Please contact an administrator.';
-                    setError(inactiveErrorMsg);
-                    setUser(null);
-                    lastSuccessfullyFetchedUserIdRef.current = null;
-                    setIsLoading(false);
-                    throw new Error(inactiveErrorMsg);
+                    throw new Error(fetchedUser.deletedAt ? 'Votre compte a été supprimé.' : 'Votre compte a été désactivé.');
                 }
-                setError('');
+                // Si l'utilisateur est valide, onAuthStateChange s'occupera de la mise à jour de l'état.
             } else {
-                throw new Error("Authentication successful but no user object returned.");
+                throw new Error("Authentification réussie mais aucune donnée utilisateur retournée.");
             }
         } catch (err) {
-            let errorMessage = 'An unexpected error occurred during login.';
-            if (err instanceof AuthError) {
-                errorMessage = err.message;
-            } else if (err instanceof Error) {
+            let errorMessage = 'Une erreur inattendue est survenue lors de la connexion.';
+            if (err instanceof AuthError || err instanceof Error) {
                 errorMessage = err.message;
             }
-
-            const specificErrors = [
-                'Your account has been disabled. Please contact an administrator.',
-                'Your account has been deleted.'
-            ];
-
-            if (!(err instanceof Error && specificErrors.includes(err.message))) {
-                if (errorMessage.toLowerCase().includes('invalid login credentials')) {
-                    setError('Incorrect email or password.');
-                } else {
-                    setError(errorMessage);
-                }
-            } else {
-                setError(errorMessage);
+            if (errorMessage.toLowerCase().includes('invalid login credentials')) {
+                errorMessage = 'Email ou mot de passe incorrect.';
             }
-
-            setUser(null);
-            lastSuccessfullyFetchedUserIdRef.current = null;
-            if(isLoading) setIsLoading(false);
+            setError(errorMessage);
+            setIsLoading(false);
             throw err;
         }
     };
 
     const logout = async (): Promise<void> => {
         setIsLoading(true);
-        try {
-            const { error: signOutError } = await supabase.auth.signOut();
-            if (signOutError) {
-                console.error('[AuthContext] logout: Supabase signOutError:', signOutError);
-            }
-        } catch (e) {
-            console.error('[AuthContext] logout: Exception during sign out:', e);
-        } finally {
-            setUser(null);
-            lastSuccessfullyFetchedUserIdRef.current = null;
-            setError('');
+        const { error: signOutError } = await supabase.auth.signOut();
+        if (signOutError) {
+            console.error('[AuthContext] Logout error:', signOutError);
+            setError("La déconnexion a échoué.");
             setIsLoading(false);
-            console.log('[AuthContext] logout: User cleared and loading stopped in finally.');
         }
+        // En cas de succès, onAuthStateChange s'occupera de la mise à jour de l'état.
+    };
+
+    const value: AuthContextType = {
+        user,
+        login,
+        logout,
+        isLoading,
+        error
     };
 
     return (
-        <AuthContext.Provider value={{ user, login, logout, isLoading, error }}>
+        <AuthContext.Provider value={value}>
             {children}
         </AuthContext.Provider>
     );

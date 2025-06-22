@@ -1,6 +1,6 @@
 // src/components/forms/FactureForm.tsx
 import React, { useState, useEffect } from 'react';
-import { useForm, useFieldArray, Controller, Control, UseFormSetValue, UseFormGetValues, UseFormWatch } from 'react-hook-form'; // Ajout des types
+import { useForm, useFieldArray, Controller, Control } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { v4 as uuidv4 } from 'uuid';
@@ -9,14 +9,17 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { X, PlusCircle } from 'lucide-react';
 import { Company } from '@/types';
 import { companiesApi } from '@/services/api';
-import { formatDateForInput, cn } from '@/lib/utils';
+import { formatDateForInput, cn, formatCurrency } from '@/lib/utils';
 
-// Schéma et types (inchangés)
+// Import des styles et composants partagés
+import { formStyles as styles } from './FormStyles';
+import { FormCard, FormSection, DeleteItemButton, AddItemButton } from './SharedFormComponents';
+
+// Schéma et types
 const invoiceItemSchema = z.object({
     id: z.string(),
     description: z.string().min(1, "La description de l'article est requise."),
@@ -59,11 +62,9 @@ export interface FactureFormSubmitData extends Omit<FactureFormValues, 'issueDat
 }
 
 // --- NumberInputController défini comme un composant autonome ---
-// (Idéalement, ce composant serait dans un fichier séparé et importé ici et dans DevisForm.tsx)
 interface NumberInputControllerProps {
     name: `items.${number}.quantity` | `items.${number}.unitPrice`;
-    control: Control<FactureFormValues>; // Type spécifique pour FactureForm
-    watch: UseFormWatch<FactureFormValues>; // Type spécifique
+    control: Control<FactureFormValues>;
     placeholder: string;
     isUnitPrice?: boolean;
 }
@@ -71,12 +72,10 @@ interface NumberInputControllerProps {
 const NumberInputController: React.FC<NumberInputControllerProps> = ({
                                                                          name,
                                                                          control,
-                                                                         watch,
                                                                          placeholder,
                                                                          isUnitPrice = false,
                                                                      }) => {
     const [isFocused, setIsFocused] = useState(false);
-    const fieldValue = watch(name);
 
     return (
         <Controller
@@ -138,7 +137,7 @@ const FactureForm: React.FC<FactureFormProps> = ({ onSubmit, onCancel, isLoading
     const defaultDueDate = new Date(today);
     defaultDueDate.setDate(today.getDate() + 30);
 
-    const { control, handleSubmit, register, watch, setValue, getValues, formState: { errors } } = useForm<FactureFormValues>({
+    const { control, handleSubmit, register, watch, setValue, formState: { errors } } = useForm<FactureFormValues>({
         resolver: zodResolver(factureFormSchema),
         defaultValues: initialData || {
             companyId: '',
@@ -171,6 +170,11 @@ const FactureForm: React.FC<FactureFormProps> = ({ onSubmit, onCancel, isLoading
 
     const watchedItems = watch("items");
 
+    // Fonction pour calculer le total de la facture
+    const calculateTotal = (items: typeof watchedItems) => {
+        return items.reduce((sum, item) => sum + (item.total || 0), 0);
+    };
+
     useEffect(() => {
         watchedItems.forEach((item, index) => {
             const quantity = Number(item.quantity) || 0;
@@ -202,14 +206,14 @@ const FactureForm: React.FC<FactureFormProps> = ({ onSubmit, onCancel, isLoading
     };
 
     return (
-        <form onSubmit={handleSubmit(processSubmit)} className="w-full space-y-6 p-1">
-            <Card>
-                <CardHeader>
-                    <CardTitle>Informations Générales de la Facture</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                    <div>
-                        <Label htmlFor="companyId">Client</Label>
+        <form onSubmit={handleSubmit(processSubmit)} className={styles.wrapper}>
+            <FormCard
+                title="Informations Générales de la Facture"
+                description="Renseignez les informations de base de la facture"
+            >
+                <FormSection>
+                    <div className={styles.inputGroup}>
+                        <Label htmlFor="companyId" className={styles.label}>Client</Label>
                         <Controller
                             name="companyId"
                             control={control}
@@ -231,9 +235,9 @@ const FactureForm: React.FC<FactureFormProps> = ({ onSubmit, onCancel, isLoading
                         {errors.companyId && <p className="text-sm text-red-600 mt-1">{errors.companyId.message}</p>}
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                            <Label htmlFor="issueDate">Date d'émission</Label>
+                    <div className={styles.grid}>
+                        <div className={styles.inputGroup}>
+                            <Label htmlFor="issueDate" className={styles.label}>Date d'émission</Label>
                             <Controller
                                 name="issueDate"
                                 control={control}
@@ -248,8 +252,8 @@ const FactureForm: React.FC<FactureFormProps> = ({ onSubmit, onCancel, isLoading
                             />
                             {errors.issueDate && <p className="text-sm text-red-600 mt-1">{errors.issueDate.message}</p>}
                         </div>
-                        <div>
-                            <Label htmlFor="dueDate">Date d'échéance</Label>
+                        <div className={styles.inputGroup}>
+                            <Label htmlFor="dueDate" className={styles.label}>Date d'échéance</Label>
                             <Controller
                                 name="dueDate"
                                 control={control}
@@ -266,67 +270,58 @@ const FactureForm: React.FC<FactureFormProps> = ({ onSubmit, onCancel, isLoading
                         </div>
                     </div>
 
-                    <div>
-                        <Label htmlFor="notes">Notes (optionnel)</Label>
+                    <div className={styles.inputGroup}>
+                        <Label htmlFor="notes" className={styles.label}>Notes (optionnel)</Label>
                         <Textarea id="notes" {...register("notes")} placeholder="Termes de paiement, informations bancaires..." rows={3} />
                     </div>
-                </CardContent>
-            </Card>
+                </FormSection>
+            </FormCard>
 
-            <Card>
-                <CardHeader className="flex flex-row items-center justify-between">
-                    <CardTitle>Articles de la Facture</CardTitle>
-                    <Button type="button" variant="outline" size="sm" onClick={handleAddItem} className="flex items-center gap-1">
-                        <PlusCircle className="h-4 w-4" /> Ajouter un article
-                    </Button>
-                </CardHeader>
-                <CardContent className="space-y-4">
+            <FormCard
+                title="Articles de la Facture"
+                description="Ajoutez les articles à inclure dans la facture"
+            >
+                <div className="flex justify-end mb-4">
+                    <AddItemButton onClick={handleAddItem} />
+                </div>
+
+                <div className="space-y-4">
                     {fields.length === 0 && (
-                        <p className="text-sm text-slate-500 text-center py-4">Aucun article ajouté.</p>
+                        <p className="text-sm text-muted-foreground text-center py-4">Aucun article ajouté.</p>
                     )}
                     {fields.map((fieldItem, index) => (
-                        <div key={fieldItem.id} className="p-4 border rounded-lg space-y-3 relative bg-card/50 dark:bg-muted/20">
-                            <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                className="absolute top-2 right-2 text-muted-foreground hover:text-destructive h-7 w-7"
-                                onClick={() => remove(index)}
-                            >
-                                <X className="h-4 w-4" />
-                            </Button>
+                        <div key={fieldItem.id} className={styles.item}>
+                            <DeleteItemButton onClick={() => remove(index)} />
                             <div className="mb-2">
-                                <Label htmlFor={`items.${index}.description`}>Description de l'article #{index + 1}</Label>
+                                <Label htmlFor={`items.${index}.description`} className={styles.label}>Description de l'article #{index + 1}</Label>
                                 <Input id={`items.${index}.description`} {...register(`items.${index}.description`)} placeholder="Description de l'article ou service" />
                                 {errors.items?.[index]?.description && <p className="text-sm text-red-600 mt-1">{errors.items?.[index]?.description?.message}</p>}
                             </div>
                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                                <div>
-                                    <Label htmlFor={`items.${index}.quantity`}>Quantité</Label>
+                                <div className={styles.inputGroup}>
+                                    <Label htmlFor={`items.${index}.quantity`} className={styles.label}>Quantité</Label>
                                     <NumberInputController
                                         name={`items.${index}.quantity`}
                                         control={control}
-                                        watch={watch}
                                         placeholder="1"
                                     />
                                     {errors.items?.[index]?.quantity && <p className="text-sm text-red-600 mt-1">{errors.items?.[index]?.quantity?.message}</p>}
                                 </div>
-                                <div>
-                                    <Label htmlFor={`items.${index}.unitPrice`}>Prix Unitaire (€)</Label>
+                                <div className={styles.inputGroup}>
+                                    <Label htmlFor={`items.${index}.unitPrice`} className={styles.label}>Prix Unitaire (FCFA)</Label>
                                     <NumberInputController
                                         name={`items.${index}.unitPrice`}
                                         control={control}
-                                        watch={watch}
                                         placeholder="0.00"
                                         isUnitPrice={true}
                                     />
                                     {errors.items?.[index]?.unitPrice && <p className="text-sm text-red-600 mt-1">{errors.items?.[index]?.unitPrice?.message}</p>}
                                 </div>
                                 <div className="self-end">
-                                    <Label>Total Article (€)</Label>
+                                    <Label className={styles.label}>Total Article (FCFA)</Label>
                                     <Input
                                         type="text"
-                                        value={watchedItems[index]?.total?.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0,00'}
+                                        value={formatCurrency(watchedItems[index]?.total || 0)}
                                         readOnly
                                         disabled
                                         className={cn(
@@ -342,10 +337,20 @@ const FactureForm: React.FC<FactureFormProps> = ({ onSubmit, onCancel, isLoading
                     {errors.items && typeof errors.items.message === 'string' && (
                         <p className="text-sm text-red-600 mt-1">{errors.items.message}</p>
                     )}
-                </CardContent>
-            </Card>
+                </div>
+            </FormCard>
 
-            <div className="flex justify-end gap-3 pt-4">
+            {/* Section Totaux */}
+            <div className={styles.totalsSection}>
+                <div className="flex justify-between items-center">
+                    <span className="font-medium text-foreground">Total de la Facture</span>
+                    <span className="text-xl font-semibold text-primary">
+                        {formatCurrency(calculateTotal(watchedItems))}
+                    </span>
+                </div>
+            </div>
+
+            <div className={styles.buttonsWrapper}>
                 <Button type="button" variant="outline" onClick={onCancel} disabled={isLoading}>
                     Annuler
                 </Button>

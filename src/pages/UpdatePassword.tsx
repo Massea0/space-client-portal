@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { KeyRound } from 'lucide-react';
-import { useToast } from '@/hooks/useToast';
+import { toast } from 'sonner'; // MODIFIÉ: Import de toast depuis sonner
 
 const UpdatePasswordPage = () => {
     const [password, setPassword] = useState('');
@@ -15,7 +15,7 @@ const UpdatePasswordPage = () => {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const navigate = useNavigate();
-    const { toast } = useToast();
+    // const { toast } = useToast(); // SUPPRIMÉ: Plus besoin du hook useToast
 
     const handleUpdatePassword = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -36,17 +36,13 @@ const UpdatePasswordPage = () => {
 
         if (updateError) {
             console.error('Error updating password:', updateError);
-            toast({
-                title: 'Erreur',
+            toast.error('Erreur', { // MODIFIÉ: Appel direct à toast.error
                 description: updateError.message || 'Impossible de mettre à jour le mot de passe. Le lien a peut-être expiré.',
-                variant: 'error',
             });
             setError(updateError.message);
         } else {
-            toast({
-                title: 'Succès',
+            toast.success('Succès', { // MODIFIÉ: Appel direct à toast.success
                 description: 'Votre mot de passe a été mis à jour. Vous pouvez maintenant vous connecter.',
-                variant: 'success',
             });
             setTimeout(() => navigate('/login'), 3000);
         }

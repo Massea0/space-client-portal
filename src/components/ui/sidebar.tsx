@@ -1,9 +1,15 @@
 // src/components/ui/sidebar.tsx
 import * as React from "react"
-import { createContext, useContext, useState, useCallback } from "react"
+import { createContext, useContext, useCallback } from "react" // Removed useState
 import { Slot } from "@radix-ui/react-slot"
 import { cn } from "@/lib/utils"
-import { useIsMobile } from "@/hooks/use-mobile" // Assurez-vous que ce hook existe
+import { useIsMobile } from "@/hooks/use-mobile"
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipProvider,
+    TooltipTrigger,
+} from "@/components/ui/tooltip"
 
 // --- Context pour l'état de la Sidebar ---
 interface SidebarContextProps {
@@ -19,48 +25,42 @@ const SidebarContext = createContext<SidebarContextProps | undefined>(undefined)
 export function useSidebar() {
     const context = useContext(SidebarContext)
     if (!context) {
-        throw new Error("useSidebar must be used within a SidebarProvider (which is the Sidebar component itself)")
+        throw new Error("useSidebar must be used within a Sidebar component (which acts as its provider)")
     }
     return context
 }
 
 // --- Composant Sidebar principal (agit comme fournisseur de contexte) ---
 interface SidebarProps extends React.HTMLAttributes<HTMLDivElement> {
-    defaultCollapsed?: boolean
-    collapsible?: boolean
+    isCollapsed: boolean; // Prop contrôlée
+    setIsCollapsed: (collapsed: boolean) => void; // Setter pour la prop contrôlée
+    collapsible?: boolean;
 }
 
 const Sidebar = React.forwardRef<HTMLDivElement, SidebarProps>(
-    ({ className, children, defaultCollapsed = false, collapsible = true, ...props }, ref) => {
-        const isMobile = useIsMobile()
-        const [isCollapsed, setIsCollapsed] = useState(isMobile ? true : defaultCollapsed)
+    ({ className, children, isCollapsed, setIsCollapsed, collapsible = true, ...props }, ref) => {
+        const isMobile = useIsMobile();
 
+        // Callbacks pour mettre à jour l'état externe
         const toggle = useCallback(() => {
             if (collapsible) {
-                setIsCollapsed((prev) => !prev)
+                setIsCollapsed(!isCollapsed);
             }
-        }, [collapsible])
+        }, [collapsible, isCollapsed, setIsCollapsed]);
 
         const expand = useCallback(() => {
             if (collapsible && isCollapsed) {
-                setIsCollapsed(false)
+                setIsCollapsed(false);
             }
-        }, [collapsible, isCollapsed])
+        }, [collapsible, isCollapsed, setIsCollapsed]);
 
         const collapse = useCallback(() => {
             if (collapsible && !isCollapsed) {
-                setIsCollapsed(true)
+                setIsCollapsed(true);
             }
-        }, [collapsible, isCollapsed])
+        }, [collapsible, isCollapsed, setIsCollapsed]);
 
-        // S'assurer que la sidebar est collapsée sur mobile initialement
-        React.useEffect(() => {
-            if (isMobile) {
-                setIsCollapsed(true)
-            }
-        }, [isMobile])
-
-        const state = isMobile ? "collapsed" : (isCollapsed ? "collapsed" : "expanded")
+        const state = isMobile ? "collapsed" : (isCollapsed ? "collapsed" : "expanded");
 
         return (
             <SidebarContext.Provider value={{ state, isMobile, toggle, expand, collapse }}>
@@ -68,8 +68,6 @@ const Sidebar = React.forwardRef<HTMLDivElement, SidebarProps>(
                     ref={ref}
                     className={cn(
                         "bg-sidebar text-sidebar-foreground transition-all duration-300 ease-in-out",
-                        // Les classes de largeur seront appliquées par AppSidebar ou ici si nécessaire
-                        // Exemple: state === "collapsed" && !isMobile ? "w-16" : "w-64",
                         className
                     )}
                     data-state={state}
@@ -78,10 +76,10 @@ const Sidebar = React.forwardRef<HTMLDivElement, SidebarProps>(
                     {children}
                 </div>
             </SidebarContext.Provider>
-        )
+        );
     }
-)
-Sidebar.displayName = "Sidebar"
+);
+Sidebar.displayName = "Sidebar";
 
 // --- Composant SidebarContent ---
 const SidebarContent = React.forwardRef<
@@ -93,8 +91,8 @@ const SidebarContent = React.forwardRef<
         className={cn("h-full overflow-y-auto", className)}
         {...props}
     />
-))
-SidebarContent.displayName = "SidebarContent"
+));
+SidebarContent.displayName = "SidebarContent";
 
 // --- Composant SidebarGroup ---
 const SidebarGroup = React.forwardRef<
@@ -103,11 +101,11 @@ const SidebarGroup = React.forwardRef<
 >(({ className, ...props }, ref) => (
     <div
         ref={ref}
-        className={cn("mb-4 last:mb-0", className)} // Espacement entre les groupes
+        className={cn("mb-4 last:mb-0", className)}
         {...props}
     />
-))
-SidebarGroup.displayName = "SidebarGroup"
+));
+SidebarGroup.displayName = "SidebarGroup";
 
 // --- Composant SidebarGroupContent ---
 const SidebarGroupContent = React.forwardRef<
@@ -116,11 +114,11 @@ const SidebarGroupContent = React.forwardRef<
 >(({ className, ...props }, ref) => (
     <div
         ref={ref}
-        className={cn("", className)} // Pas de style spécifique par défaut
+        className={cn("", className)}
         {...props}
     />
-))
-SidebarGroupContent.displayName = "SidebarGroupContent"
+));
+SidebarGroupContent.displayName = "SidebarGroupContent";
 
 // --- Composant SidebarMenu ---
 const SidebarMenu = React.forwardRef<
@@ -129,11 +127,11 @@ const SidebarMenu = React.forwardRef<
 >(({ className, ...props }, ref) => (
     <ul
         ref={ref}
-        className={cn("space-y-1", className)} // Espacement entre les items du menu
+        className={cn("space-y-1", className)}
         {...props}
     />
-))
-SidebarMenu.displayName = "SidebarMenu"
+));
+SidebarMenu.displayName = "SidebarMenu";
 
 // --- Composant SidebarMenuItem ---
 const SidebarMenuItem = React.forwardRef<
@@ -142,26 +140,26 @@ const SidebarMenuItem = React.forwardRef<
 >(({ className, ...props }, ref) => (
     <li
         ref={ref}
-        className={cn("", className)} // Pas de style spécifique par défaut
+        className={cn("", className)}
         {...props}
     />
-))
-SidebarMenuItem.displayName = "SidebarMenuItem"
+));
+SidebarMenuItem.displayName = "SidebarMenuItem";
 
 // --- Composant SidebarMenuButton ---
 interface SidebarMenuButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-    asChild?: boolean
-    isActive?: boolean
-    tooltip?: string // Pour le tooltip quand la sidebar est collapsée
+    asChild?: boolean;
+    isActive?: boolean;
+    tooltip?: string;
 }
 
 const SidebarMenuButton = React.forwardRef<
     HTMLButtonElement,
     SidebarMenuButtonProps
 >(({ className, asChild = false, isActive, tooltip, ...props }, ref) => {
-    const Comp = asChild ? Slot : "button"
-    const { state: sidebarState, isMobile } = useSidebar() // Utiliser le hook ici
-    const isActuallyCollapsed = !isMobile && sidebarState === 'collapsed'
+    const Comp = asChild ? Slot : "button";
+    const { state: sidebarState, isMobile } = useSidebar();
+    const isActuallyCollapsed = !isMobile && sidebarState === 'collapsed';
 
     const buttonContent = (
         <Comp
@@ -175,32 +173,34 @@ const SidebarMenuButton = React.forwardRef<
             )}
             {...props}
         />
-    )
+    );
 
     if (isActuallyCollapsed && tooltip) {
-        // Ici, vous pourriez intégrer votre composant Tooltip de shadcn/ui
-        // Pour la simplicité, je vais juste ajouter un title pour l'instant
-        // mais l'idéal serait d'utiliser <Tooltip><TooltipTrigger>{buttonContent}</TooltipTrigger><TooltipContent>{tooltip}</TooltipContent></Tooltip>
-        return React.cloneElement(buttonContent, { title: tooltip } as React.HTMLAttributes<HTMLElement>)
+        return (
+            <Tooltip>
+                <TooltipTrigger asChild>{buttonContent}</TooltipTrigger>
+                <TooltipContent side="right">{tooltip}</TooltipContent>
+            </Tooltip>
+        );
     }
 
-    return buttonContent
-})
-SidebarMenuButton.displayName = "SidebarMenuButton"
+    return buttonContent;
+});
+SidebarMenuButton.displayName = "SidebarMenuButton";
 
 // Optionnel: SidebarTrigger pour contrôler l'ouverture/fermeture depuis l'extérieur
 const SidebarTrigger = React.forwardRef<
     HTMLButtonElement,
     React.ButtonHTMLAttributes<HTMLButtonElement>
 >(({ className, children, ...props }, ref) => {
-    const { toggle } = useSidebar()
+    const { toggle } = useSidebar();
     return (
         <button ref={ref} onClick={toggle} className={cn(className)} {...props}>
             {children || "Toggle Sidebar"}
         </button>
-    )
-})
-SidebarTrigger.displayName = "SidebarTrigger"
+    );
+});
+SidebarTrigger.displayName = "SidebarTrigger";
 
 
 export {
@@ -211,6 +211,5 @@ export {
     SidebarMenu,
     SidebarMenuItem,
     SidebarMenuButton,
-    SidebarTrigger, // Exporté si vous voulez un bouton de déclenchement externe
-    // SidebarProvider n'est pas exporté car Sidebar agit comme fournisseur
-}
+    SidebarTrigger,
+};

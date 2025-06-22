@@ -4,39 +4,31 @@ import { ThemeSwitcher } from '@/components/theme/ThemeSwitcher';
 
 const AuthLayout = ({ children }: { children: React.ReactNode }) => {
     return (
-        <div className="min-h-screen w-full lg:grid lg:grid-cols-2">
-            {/* Left Pane: Branding (visible on large screens) */}
-            <div className="relative hidden h-full flex-col bg-muted p-10 text-white lg:flex dark:border-r">
-                {/* Background Image */}
-                <div
-                    className="absolute inset-0 bg-cover bg-center"
-                    style={{ backgroundImage: 'url(/images/auth-background.jpg)' }}
-                />
-                {/* Color Overlay */}
-                <div className="absolute inset-0 bg-zinc-900 opacity-75" />
-
-                {/* Content */}
-                <div className="relative z-20 flex items-center text-lg font-medium">
-                    <img src="/logo/logo-white.png" alt="Logo Arcadis" className="h-10 w-auto mr-3" />
-                    Arcadis Space
-                </div>
-                <div className="relative z-20 mt-auto">
-                    <blockquote className="space-y-2">
-                        <p className="text-lg">
-                            &ldquo;Votre portail client dédié pour une gestion simplifiée et efficace de vos projets avec Arcadis.&rdquo;
-                        </p>
-                        <footer className="text-sm">Arcadis Technologies</footer>
-                    </blockquote>
-                </div>
+        // Conteneur principal qui prend tout l'écran et centre le contenu
+        <div className="min-h-screen w-full flex flex-col items-center justify-center bg-muted/40 p-4 relative">
+            {/* Positionnement du ThemeSwitcher en haut à droite */}
+            <div className="absolute top-4 right-4">
+                <ThemeSwitcher />
             </div>
 
-            {/* Right Pane: Form (full width on mobile) */}
-            <div className="relative flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 bg-background">
-                <div className="absolute top-4 right-4">
-                    <ThemeSwitcher />
-                </div>
+            {/* Logo et nom de l'application */}
+            <div className="mb-8 flex flex-col items-center text-center">
+                <img src="/logo/logo-header.png" alt="Logo Arcadis" className="h-20 w-auto" />
+                <h1 className="mt-4 text-3xl font-bold text-primary">
+                    Arcadis Space
+                </h1>
+                <p className="text-muted-foreground">Votre portail client dédié.</p>
+            </div>
+
+            {/* Conteneur pour le formulaire (LoginForm, ForgotPasswordForm, etc.) */}
+            <div className="w-full max-w-md">
                 {children}
             </div>
+
+            {/* Footer simple */}
+            <footer className="absolute bottom-4 text-center text-sm text-muted-foreground">
+                &copy; {new Date().getFullYear()} Arcadis Technologies. Tous droits réservés.
+            </footer>
         </div>
     );
 };
