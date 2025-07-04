@@ -191,17 +191,72 @@ const FactureForm: React.FC<FactureFormProps> = ({ onSubmit, onCancel, isLoading
     };
 
     const processSubmit = (data: FactureFormValues) => {
+        console.log('🚀 DÉBUT DE SOUMISSION DU FORMULAIRE');
+        console.log('🔍 Données brutes du formulaire:', data);
+        
+        // NOUVELLE VALIDATION: vérifier qu'au moins un article a un prix unitaire > 0
+        const hasValidItems = data.items.some(item => {
+            const unitPrice = Number(item.unitPrice) || 0;
+            return unitPrice > 0;
+        });
+        
+        if (!hasValidItems) {
+            console.error('❌ ERREUR DE VALIDATION: Aucun article n\'a de prix unitaire valide (> 0)');
+            alert('⚠️ Attention: Veuillez saisir un prix unitaire supérieur à zéro pour au moins un article.');
+            return;
+        }
+        
+        // Recalculer les totaux pour s'assurer qu'ils sont à jour
+        const itemsWithUpdatedTotals = data.items.map((item, index) => {
+            const quantity = Number(item.quantity) || 0;
+            const unitPrice = Number(item.unitPrice) || 0;
+            const total = parseFloat((quantity * unitPrice).toFixed(2));
+            
+            console.log(`📋 Item ${index + 1}:`, {
+                description: item.description,
+                quantity: {
+                    original: item.quantity,
+                    converted: quantity,
+                    type: typeof item.quantity
+                },
+                unitPrice: {
+                    original: item.unitPrice,
+                    converted: unitPrice,
+                    type: typeof item.unitPrice
+                },
+                total: {
+                    original: item.total,
+                    calculated: total
+                }
+            });
+            
+            return {
+                description: item.description,
+                quantity: quantity,
+                unitPrice: unitPrice,
+                total: total,
+            };
+        });
+
+        const totalGeneral = itemsWithUpdatedTotals.reduce((sum, item) => sum + item.total, 0);
+        console.log('💰 Total général calculé:', totalGeneral);
+        
+        // NOUVELLE VALIDATION: double vérification du total
+        if (totalGeneral <= 0) {
+            console.error('❌ ERREUR: Le montant total calculé est zéro ou négatif');
+            alert('⚠️ Le montant total de la facture doit être supérieur à zéro. Vérifiez les quantités et prix unitaires.');
+            return;
+        }
+        
         const submitData: FactureFormSubmitData = {
             ...data,
             issueDate: data.issueDate.toISOString().split('T')[0],
             dueDate: data.dueDate.toISOString().split('T')[0],
-            items: data.items.map(item => ({
-                description: item.description,
-                quantity: item.quantity,
-                unitPrice: item.unitPrice,
-                total: item.total,
-            })),
+            items: itemsWithUpdatedTotals,
         };
+        
+        console.log('� Données de soumission finales envoyées à AdminFactures:', submitData);
+        console.log('🏁 FIN DE TRAITEMENT DANS LE FORMULAIRE');
         onSubmit(submitData);
     };
 
@@ -308,14 +363,22 @@ const FactureForm: React.FC<FactureFormProps> = ({ onSubmit, onCancel, isLoading
                                     {errors.items?.[index]?.quantity && <p className="text-sm text-red-600 mt-1">{errors.items?.[index]?.quantity?.message}</p>}
                                 </div>
                                 <div className={styles.inputGroup}>
-                                    <Label htmlFor={`items.${index}.unitPrice`} className={styles.label}>Prix Unitaire (FCFA)</Label>
+                                    <Label htmlFor={`items.${index}.unitPrice`} className={styles.label}>
+                                        Prix Unitaire (FCFA)
+                                        {watchedItems[index]?.unitPrice === 0 && (
+                                            <span className="text-amber-600 text-xs ml-2">⚠️ Saisissez un prix</span>
+                                        )}
+                                    </Label>
                                     <NumberInputController
                                         name={`items.${index}.unitPrice`}
                                         control={control}
-                                        placeholder="0.00"
+                                        placeholder="Saisissez le prix..."
                                         isUnitPrice={true}
                                     />
                                     {errors.items?.[index]?.unitPrice && <p className="text-sm text-red-600 mt-1">{errors.items?.[index]?.unitPrice?.message}</p>}
+                                    {watchedItems[index]?.unitPrice === 0 && (
+                                        <p className="text-xs text-amber-600 mt-1">💡 Le prix unitaire ne peut pas être zéro</p>
+                                    )}
                                 </div>
                                 <div className="self-end">
                                     <Label className={styles.label}>Total Article (FCFA)</Label>
@@ -344,9 +407,17 @@ const FactureForm: React.FC<FactureFormProps> = ({ onSubmit, onCancel, isLoading
             <div className={styles.totalsSection}>
                 <div className="flex justify-between items-center">
                     <span className="font-medium text-foreground">Total de la Facture</span>
-                    <span className="text-xl font-semibold text-primary">
-                        {formatCurrency(calculateTotal(watchedItems))}
-                    </span>
+                    <div className="flex flex-col items-end">
+                        <span className={cn(
+                            "text-xl font-semibold",
+                            calculateTotal(watchedItems) > 0 ? "text-primary" : "text-amber-600"
+                        )}>
+                            {formatCurrency(calculateTotal(watchedItems))}
+                        </span>
+                        {calculateTotal(watchedItems) === 0 && (
+                            <span className="text-xs text-amber-600 mt-1">⚠️ Saisissez les prix unitaires</span>
+                        )}
+                    </div>
                 </div>
             </div>
 
@@ -354,7 +425,11 @@ const FactureForm: React.FC<FactureFormProps> = ({ onSubmit, onCancel, isLoading
                 <Button type="button" variant="outline" onClick={onCancel} disabled={isLoading}>
                     Annuler
                 </Button>
-                <Button type="submit" disabled={isLoading}>
+                <Button 
+                    type="submit" 
+                    disabled={isLoading || calculateTotal(watchedItems) === 0}
+                    className={calculateTotal(watchedItems) === 0 ? "opacity-50 cursor-not-allowed" : ""}
+                >
                     {isLoading ? 'Enregistrement...' : 'Enregistrer la Facture'}
                 </Button>
             </div>

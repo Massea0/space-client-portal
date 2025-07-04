@@ -20,13 +20,17 @@ if [ -n "$FILES" ]; then
   
   # Pour chaque fichier modifié
   for FILE in $FILES; do
-    # Vérifie les balises non fermées avec une regex simple
-    OPEN_TAGS=$(grep -o '<[a-zA-Z][a-zA-Z0-9]*' $FILE | grep -v '/>' | sed 's/<//' | sort)
+    # Vérifie les balises JSX non auto-fermantes et non fermées
+    OPEN_TAGS=$(grep -o '<[a-zA-Z][a-zA-Z0-9]*[^/]*[^>]*>' $FILE | grep -v '/>' | grep -v '</' | sed 's/<\([a-zA-Z][a-zA-Z0-9]*\).*/\1/' | sort)
     CLOSE_TAGS=$(grep -o '</[a-zA-Z][a-zA-Z0-9]*>' $FILE | sed 's/<\///' | sed 's/>//' | sort)
     
-    # Compare les balises ouvertes et fermées (solution basique mais utile)
-    if [ "$(echo "$OPEN_TAGS" | wc -l)" != "$(echo "$CLOSE_TAGS" | wc -l)" ]; then
+    # Compare le nombre de balises ouvertes non auto-fermantes et fermées
+    OPEN_COUNT=$(echo "$OPEN_TAGS" | grep -v '^$' | wc -l)
+    CLOSE_COUNT=$(echo "$CLOSE_TAGS" | grep -v '^$' | wc -l)
+    
+    if [ "$OPEN_COUNT" != "$CLOSE_COUNT" ]; then
       echo "❌ Possible problème de balises JSX non fermées dans $FILE"
+      echo "Balises ouvertes: $OPEN_COUNT, Balises fermées: $CLOSE_COUNT"
       echo "Réviser attentivement ce fichier avant de commiter."
       exit 1
     fi
