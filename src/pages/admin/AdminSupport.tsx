@@ -1,87 +1,73 @@
 // src/pages/admin/AdminSupport.tsx
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { Card, CardContent } from '@/components/ui/card';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Badge } from '@/components/ui/badge';
+import { Card, CardContent } from '@/components/ui/card';
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogTrigger,
-  DialogFooter
-} from '@/components/ui/dialog';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Textarea } from '@/components/ui/textarea';
-import { formatDate, formatDateTime, cn } from '@/lib/utils';
-import { toast } from 'sonner';
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectValue,
+  SelectTrigger
+} from '@/components/ui/select';
+import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
+import { formatDate, cn } from '@/lib/utils';
 import { ticketsApi, ticketCategoriesApi } from '@/services/api';
 import { Ticket, TicketCategory, TicketMessage } from '@/types';
-import { Search, MessageSquare, Building, Calendar, User, Send, Eye, Filter, Trash2, Maximize2, Minimize2 } from 'lucide-react';
+import { 
+  Search, Filter, Plus, MessageCircle, CheckCircle, XCircle, 
+  AlertTriangle, Clock, FileText, LayoutGrid, LayoutList, RefreshCw,
+  Eye
+} from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
-import { formStyles as styles } from '@/components/forms/FormStyles';
-import { FormSection } from '@/components/forms/SharedFormComponents';
+import { notificationManager } from '@/components/ui/notification-provider';
+import { SafeSelectTrigger } from '@/components/ui/safe-triggers';
+import { connectionDiagnostic } from '@/lib/connectionDiagnostic';
+import { ConnectionTroubleshooter } from '@/components/diagnostics/ConnectionTroubleshooter';
 
+// Importer les composants interactifs
+import InteractiveTicketCard from '@/components/modules/support/InteractiveTicketCard';
+import { InteractiveSupportGrid } from '@/components/modules/support/InteractiveSupportGrid';
+import { TicketDetailView } from '@/components/support';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+
+// Type pour les modes d'affichage disponibles
+type ViewMode = 'cards' | 'interactive' | 'list';
 
 const AdminSupport = () => {
   const { user } = useAuth();
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  // États pour la gestion des tickets
+  const [tickets, setTickets] = useState<Ticket[]>([]);
+  const [categories, setCategories] = useState<TicketCategory[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+  
+  // États pour les filtres
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [priorityFilter, setPriorityFilter] = useState<string>('all');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
-  const [tickets, setTickets] = useState<Ticket[]>([]);
-
-  const [categories, setCategories] = useState<TicketCategory[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [viewMode, setViewMode] = useState<ViewMode>('interactive');
+  
+  // États pour les détails et les actions
   const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
-  const [replyMessage, setReplyMessage] = useState('');
-  const [actionLoading, setActionLoading] = useState<string | null>(null);
-  const [isModalFullScreen, setIsModalFullScreen] = useState(false);
-
-  const [editingTicketStatus, setEditingTicketStatus] = useState<Ticket['status']>();
-  const [editingTicketPriority, setEditingTicketPriority] = useState<Ticket['priority']>();
-  const [editingTicketCategoryId, setEditingTicketCategoryId] = useState<string>();
-  const [editingTicketAssignedTo, setEditingTicketAssignedTo] = useState<string>();
   const [ticketToDelete, setTicketToDelete] = useState<Ticket | null>(null);
+  const [animationReady, setAnimationReady] = useState(false);
+  const [diagnosticRunning, setDiagnosticRunning] = useState(false);
 
-  const scrollToBottom = useCallback(() => {
-    if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
-    }
-  }, []);
-
-  useEffect(() => {
-    if (selectedTicket?.messages.length) {
-      scrollToBottom();
-    }
-  }, [selectedTicket?.messages.length, scrollToBottom]);
-
+  // Fonction pour charger les tickets et catégories
   const loadTicketsAndCategories = useCallback(async () => {
     try {
       setLoading(true);
-      const [ticketsData, categoriesData] = await Promise.all([
+      const [ticketsResult, categoriesResult] = await Promise.all([
         ticketsApi.getAll(),
         ticketCategoriesApi.getAll()
       ]);
-      setTickets(ticketsData);
-      setCategories(categoriesData);
+      setTickets(ticketsResult);
+      setCategories(categoriesResult);
     } catch (error) {
-      toast.error('Erreur lors du chargement des données');
+      notificationManager.error('Erreur', { message: 'Erreur lors du chargement des données' });
     } finally {
       setLoading(false);
     }
@@ -91,39 +77,65 @@ const AdminSupport = () => {
     loadTicketsAndCategories();
   }, [loadTicketsAndCategories]);
 
+  // Déclencher l'animation après le chargement initial
+  useEffect(() => {
+    if (!loading && tickets.length > 0) {
+      const timer = setTimeout(() => {
+        setAnimationReady(true);
+      }, 300);
+      return () => clearTimeout(timer);
+    } else {
+      setAnimationReady(false);
+    }
+  }, [loading, tickets]);
+
+  // Fonction pour filtrer les tickets
   const filteredTickets = useMemo(() => {
     return tickets.filter(ticket => {
-      const matchesSearch = (
-          ticket.subject.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          ticket.companyName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          ticket.number.toLowerCase().includes(searchTerm.toLowerCase())
-      );
+      const matchesSearch = searchTerm === '' || 
+        ticket.subject.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        ticket.companyName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        ticket.number.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        ticket.description.toLowerCase().includes(searchTerm.toLowerCase());
+      
       const matchesStatus = statusFilter === 'all' || ticket.status === statusFilter;
       const matchesPriority = priorityFilter === 'all' || ticket.priority === priorityFilter;
       const matchesCategory = categoryFilter === 'all' || ticket.categoryId === categoryFilter;
+      
       return matchesSearch && matchesStatus && matchesPriority && matchesCategory;
     });
   }, [tickets, searchTerm, statusFilter, priorityFilter, categoryFilter]);
 
-  const handleSendReply = async () => {
-    if (!selectedTicket || !replyMessage.trim() || !user) return;
+  const handleSendReply = async (ticketId: string, content: string) => {
+    if (!user) return;
+    
     try {
-      setActionLoading(`message-${selectedTicket.id}`);
+      setActionLoading(`message-${ticketId}`);
       const optimisticMessage: TicketMessage = {
-        id: `temp-${Date.now()}`, ticketId: selectedTicket.id, content: replyMessage,
-        authorId: user.id, authorName: `${user.firstName} ${user.lastName}`, authorRole: 'admin',
-        createdAt: new Date(), attachments: []
+        id: `temp-${Date.now()}`, 
+        ticketId: ticketId, 
+        content: content,
+        authorId: user.id, 
+        authorName: `${user.firstName} ${user.lastName}`, 
+        authorRole: 'admin',
+        createdAt: new Date(), 
+        attachments: []
       };
+      
       setSelectedTicket(prev => prev ? { ...prev, messages: [...prev.messages, optimisticMessage] } : null);
-      const updatedTicket = await ticketsApi.addMessage(selectedTicket.id, {
-        content: replyMessage, authorId: user.id, authorName: `${user.firstName} ${user.lastName}`, authorRole: 'admin'
+      
+      const updatedTicket = await ticketsApi.addMessage(ticketId, {
+        content: content, 
+        authorId: user.id, 
+        authorName: `${user.firstName} ${user.lastName}`, 
+        authorRole: 'admin'
       });
+      
       setTickets(prevTickets => prevTickets.map(t => t.id === updatedTicket.id ? updatedTicket : t));
-      setReplyMessage('');
-      toast.success('Message envoyé avec succès');
-      scrollToBottom();
+      setSelectedTicket(updatedTicket);
+      notificationManager.success('Message envoyé', { message: 'Votre message a été envoyé avec succès' });
     } catch (error) {
-      toast.error('Erreur lors de l\'envoi du message');
+      notificationManager.error('Erreur', { message: 'Erreur lors de l\'envoi du message' });
       if (selectedTicket) {
         const currentTicket = tickets.find(t => t.id === selectedTicket.id);
         setSelectedTicket(currentTicket || null);
@@ -133,19 +145,27 @@ const AdminSupport = () => {
     }
   };
 
-  const handleUpdateTicketDetails = async () => {
-    if (!selectedTicket) return;
+  const handleUpdateTicketDetails = async (
+    ticketId: string,
+    status: Ticket['status'],
+    priority: Ticket['priority'],
+    categoryId: string | undefined,
+    assignedTo: string | undefined
+  ) => {
     try {
-      setActionLoading(`details-${selectedTicket.id}`);
+      setActionLoading(`details-${ticketId}`);
       const updatedTicket = await ticketsApi.updateStatus(
-          selectedTicket.id, editingTicketStatus || selectedTicket.status,
-          editingTicketPriority || selectedTicket.priority, editingTicketAssignedTo, editingTicketCategoryId
+        ticketId, 
+        status,
+        priority, 
+        assignedTo, 
+        categoryId
       );
-      setTickets(prevTickets => prevTickets.map(t => t.id === selectedTicket.id ? updatedTicket : t));
+      setTickets(prevTickets => prevTickets.map(t => t.id === ticketId ? updatedTicket : t));
       setSelectedTicket(updatedTicket);
-      toast.success('Ticket mis à jour avec succès');
+      notificationManager.success('Ticket mis à jour', { message: 'Informations du ticket mises à jour avec succès' });
     } catch (error) {
-      toast.error('Erreur lors de la mise à jour du ticket');
+      notificationManager.error('Erreur', { message: 'Erreur lors de la mise à jour du ticket' });
     } finally {
       setActionLoading(null);
     }
@@ -159,58 +179,142 @@ const AdminSupport = () => {
       setTickets(prevTickets => prevTickets.filter(t => t.id !== ticketToDelete.id));
       setSelectedTicket(null);
       setTicketToDelete(null);
-      toast.success(`Ticket N°${ticketToDelete.number} supprimé`);
+      notificationManager.success('Ticket supprimé', { message: `Ticket N°${ticketToDelete.number} supprimé avec succès` });
     } catch (error) {
-      toast.error('Erreur lors de la suppression du ticket');
+      notificationManager.error('Erreur', { message: 'Erreur lors de la suppression du ticket' });
     } finally {
       setActionLoading(null);
     }
   };
 
-  const openTicketDetailsDialog = (ticket: Ticket) => {
+  // Fonction pour diagnostiquer les problèmes de connexion
+  const runConnectionDiagnostic = async () => {
+    setDiagnosticRunning(true);
+    try {
+      const diagResult = await connectionDiagnostic.checkSupabaseConnection();
+      const autoFixed = await connectionDiagnostic.attemptAutoFix();
+      
+      if (autoFixed) {
+        notificationManager.success("Connexion rétablie", {
+          message: "La connexion a été rétablie. Actualisation des données..."
+        });
+        loadTicketsAndCategories();
+      } else {
+        let message = "Problèmes détectés:\n";
+        if (!diagResult.connected) message += "• Impossible de se connecter à la base de données\n";
+        if (!diagResult.authenticated) message += "• Session non authentifiée\n";
+        if (!diagResult.userProfile) message += "• Profil utilisateur introuvable\n";
+        
+        notificationManager.warning("Diagnostic de connexion", { message });
+      }
+    } catch (e) {
+      notificationManager.error("Erreur", {
+        message: "Impossible de terminer le diagnostic. Veuillez contacter le support."
+      });
+    } finally {
+      setDiagnosticRunning(false);
+    }
+  };
+
+  // Fonction pour ouvrir la vue détaillée d'un ticket
+  const handleViewDetails = (ticket: Ticket) => {
     setSelectedTicket(ticket);
-    setEditingTicketStatus(ticket.status);
-    setEditingTicketPriority(ticket.priority);
-    setEditingTicketCategoryId(ticket.categoryId);
-    setEditingTicketAssignedTo(ticket.assignedTo);
-    setIsModalFullScreen(false);
   };
 
-  const getStatusBadge = (status: Ticket['status']) => {
-    const variants: { [key in Ticket['status']]: string } = {
-      open: 'bg-blue-100 text-blue-800 dark:bg-blue-700 dark:text-blue-200',
-      in_progress: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-600 dark:text-yellow-100',
-      resolved: 'bg-green-100 text-green-800 dark:bg-green-700 dark:text-green-100',
-      closed: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200',
-      pending_admin_response: 'bg-purple-100 text-purple-800 dark:bg-purple-600 dark:text-purple-100',
-      pending_client_response: 'bg-pink-100 text-pink-800 dark:bg-pink-600 dark:text-pink-100'
-    };
-    const labels: { [key in Ticket['status']]: string } = {
-      open: 'Ouvert', in_progress: 'En cours', resolved: 'Résolu', closed: 'Fermé',
-      pending_admin_response: 'Attente Admin', pending_client_response: 'Attente Client'
-    };
-    return <Badge className={cn(variants[status])}>{labels[status]}</Badge>;
+  // Fonction pour clôturer un ticket
+  const handleCloseTicket = async (ticketId: string) => {
+    try {
+      setActionLoading(`close-${ticketId}`);
+      const updatedTicket = await ticketsApi.updateStatus(ticketId, 'closed');
+      
+      // Mettre à jour l'état local
+      setTickets(tickets.map(t => t.id === ticketId ? updatedTicket : t));
+      
+      notificationManager.success('Succès', { message: 'Le ticket a été clôturé.' });
+      
+      // Si le ticket était sélectionné, mettre à jour la vue détaillée
+      if (selectedTicket?.id === ticketId) {
+        setSelectedTicket(updatedTicket);
+      }
+    } catch (error) {
+      notificationManager.error('Erreur', { message: 'Impossible de clôturer le ticket.' });
+    } finally {
+      setActionLoading(null);
+    }
   };
 
-  const getPriorityBadge = (priority: Ticket['priority']) => {
-    const variants = {
-      low: 'bg-green-100 text-green-800 dark:bg-green-700 dark:text-green-100',
-      medium: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-600 dark:text-yellow-100',
-      high: 'bg-orange-100 text-orange-800 dark:bg-orange-600 dark:text-orange-100',
-      urgent: 'bg-red-100 text-red-800 dark:bg-red-700 dark:text-red-100'
-    };
-    const labels = { low: 'Faible', medium: 'Moyenne', high: 'Élevée', urgent: 'Urgente' };
-    return <Badge className={cn(variants[priority])}>{labels[priority]}</Badge>;
+  // Fonction pour rouvrir un ticket
+  const handleReopenTicket = async (ticketId: string) => {
+    try {
+      setActionLoading(`reopen-${ticketId}`);
+      const updatedTicket = await ticketsApi.updateStatus(ticketId, 'open');
+      
+      // Mettre à jour l'état local
+      setTickets(tickets.map(t => t.id === ticketId ? updatedTicket : t));
+      
+      notificationManager.success('Succès', { message: 'Le ticket a été rouvert.' });
+      
+      // Si le ticket était sélectionné, mettre à jour la vue détaillée
+      if (selectedTicket?.id === ticketId) {
+        setSelectedTicket(updatedTicket);
+      }
+    } catch (error) {
+      notificationManager.error('Erreur', { message: 'Impossible de rouvrir le ticket.' });
+    } finally {
+      setActionLoading(null);
+    }
   };
+
+  // Fonction pour supprimer un ticket
+  const handleDeleteTicketConfirm = async () => {
+    if (!ticketToDelete) return;
+    
+    try {
+      setActionLoading(`delete-${ticketToDelete.id}`);
+      await ticketsApi.delete(ticketToDelete.id);
+      
+      // Mettre à jour l'état local
+      setTickets(tickets.filter(t => t.id !== ticketToDelete.id));
+      
+      notificationManager.success('Succès', { message: 'Le ticket a été supprimé.' });
+      
+      // Si le ticket était sélectionné, fermer la vue détaillée
+      if (selectedTicket?.id === ticketToDelete.id) {
+        setSelectedTicket(null);
+      }
+      
+      setTicketToDelete(null);
+    } catch (error) {
+      notificationManager.error('Erreur', { message: 'Impossible de supprimer le ticket.' });
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  // Fonction de rendu des cartes de tickets pour le composant InteractiveSupportGrid
+  const renderTicketCard = React.useCallback((ticket: Ticket) => {
+    return (
+      <InteractiveTicketCard
+        key={ticket.id}
+        ticket={ticket}
+        isAdmin={true}
+        actionLoading={actionLoading}
+        onViewDetails={handleViewDetails}
+        onReplyTicket={handleViewDetails}
+        onCloseTicket={handleCloseTicket}
+        onReopenTicket={handleReopenTicket}
+      />
+    );
+  }, [actionLoading]);
 
   if (loading) {
     return (
-        <div className="flex items-center justify-center h-64">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto" />
-            <p className="mt-4 text-muted-foreground">Chargement des tickets...</p>
-          </div>
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto" />
+          <p className="mt-4 text-muted-foreground">Chargement des tickets...</p>
         </div>
+      </div>
     );
   }
 
@@ -218,172 +322,236 @@ const AdminSupport = () => {
   const availablePriorities: Ticket['priority'][] = ['low', 'medium', 'high', 'urgent'];
 
   return (
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-foreground">Tous les Tickets</h1>
-            <p className="text-muted-foreground mt-1">Gérez tous les tickets de support</p>
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-foreground">Tous les Tickets</h1>
+          <p className="text-muted-foreground mt-1">Gérez tous les tickets de support</p>
+        </div>
+      </div>
+
+      {/* Filtres et recherche */}
+      <div className="flex flex-col md:flex-row gap-4 p-2">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+          <Input placeholder="Rechercher par sujet, entreprise ou numéro..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10" />
+        </div>
+        <div className="flex gap-2 flex-wrap md:flex-nowrap">
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SafeSelectTrigger className="w-full md:w-48">
+              <Filter className="h-4 w-4 mr-2" />
+              <SelectValue placeholder="Statut" />
+            </SafeSelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Tous les statuts</SelectItem>
+              {availableStatuses.map(status => (
+                <SelectItem key={status} value={status} className="capitalize">
+                  {status.replace(/_/g, ' ')}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={priorityFilter} onValueChange={setPriorityFilter}>
+            <SafeSelectTrigger className="w-full md:w-48">
+              <SelectValue placeholder="Priorité" />
+            </SafeSelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Toutes priorités</SelectItem>
+              {availablePriorities.map(priority => (
+                <SelectItem key={priority} value={priority} className="capitalize">
+                  {priority}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+            <SafeSelectTrigger className="w-full md:w-48">
+              <SelectValue placeholder="Catégorie" />
+            </SafeSelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Toutes catégories</SelectItem>
+              {categories.map(category => (
+                <SelectItem key={category.id} value={category.id}>
+                  {category.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <div className="flex items-center bg-muted/40 rounded-lg p-1 border shadow-sm ml-2">
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button 
+                    variant={viewMode === 'interactive' ? "secondary" : "ghost"} 
+                    size="sm" 
+                    onClick={() => setViewMode('interactive')} 
+                    className="px-3"
+                  >
+                    <LayoutGrid className="h-4 w-4 mr-1" />
+                    <span className="sr-only sm:not-sr-only sm:inline-block">Cartes</span>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Vue en cartes interactives</p>
+                </TooltipContent>
+              </Tooltip>
+              
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button 
+                    variant={viewMode === 'list' ? "secondary" : "ghost"} 
+                    size="sm" 
+                    onClick={() => setViewMode('list')} 
+                    className="px-3"
+                  >
+                    <LayoutList className="h-4 w-4 mr-1" />
+                    <span className="sr-only sm:not-sr-only sm:inline-block">Liste</span>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Vue en liste détaillée</p>
+                </TooltipContent>
+              </Tooltip>
+              
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button 
+                    variant="ghost"
+                    size="sm"
+                    onClick={loadTicketsAndCategories}
+                    className="px-2 ml-1"
+                    disabled={loading}
+                  >
+                    <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Rafraîchir la liste</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </div>
         </div>
+      </div>
 
-        <div className="flex flex-col md:flex-row gap-4 p-2">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-            <Input placeholder="Rechercher par sujet, entreprise ou numéro..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10" />
-          </div>
-          <div className="flex gap-2 flex-wrap md:flex-nowrap">
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-full md:w-48"><Filter className="h-4 w-4 mr-2" /><SelectValue placeholder="Statut" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Tous les statuts</SelectItem>
-                {availableStatuses.map(status => (<SelectItem key={status} value={status} className="capitalize">{status.replace(/_/g, ' ')}</SelectItem>))}
-              </SelectContent>
-            </Select>
-            <Select value={priorityFilter} onValueChange={setPriorityFilter}>
-              <SelectTrigger className="w-full md:w-48"><SelectValue placeholder="Priorité" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Toutes priorités</SelectItem>
-                {availablePriorities.map(priority => (<SelectItem key={priority} value={priority} className="capitalize">{priority}</SelectItem>))}
-              </SelectContent>
-            </Select>
-            <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-              <SelectTrigger className="w-full md:w-48"><SelectValue placeholder="Catégorie" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Toutes catégories</SelectItem>
-                {categories.map(category => (<SelectItem key={category.id} value={category.id}>{category.name}</SelectItem>))}
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-
-        <div className="grid gap-4">
-          {filteredTickets.map((ticket) => (
-              <Card key={ticket.id} className="hover:shadow-md transition-shadow">
-                <CardContent className="p-3">
-                  <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-                    <div className="space-y-1 flex-grow">
-                      <div className="flex items-center gap-3 flex-wrap">
-                        <div className="p-2 bg-primary/10 rounded-lg"><MessageSquare className="h-5 w-5 text-primary" /></div>
-                        <div>
-                          <h3 className="text-lg font-semibold">{ticket.subject}</h3>
-                          <p className="text-sm text-muted-foreground">{ticket.number}</p>
-                        </div>
-                        {ticket.categoryName && (<Badge variant="outline" className="text-xs">{ticket.categoryName}</Badge>)}
+      {/* Liste des tickets avec animation entre les modes de vue */}
+      <div className="grid gap-4">
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.div
+            key={viewMode}
+            initial={{ opacity: 0, y: 20 }}
+            animate={animationReady ? { opacity: 1, y: 0 } : { opacity: 0, y: 20 }}
+            exit={{ opacity: 0, y: -20 }}
+            transition={{ 
+              duration: 0.5, 
+              ease: [0.22, 1, 0.36, 1],
+              opacity: { duration: 0.4 },
+              y: { type: "spring", stiffness: 100, damping: 15 }
+            }}
+          >
+            {viewMode === 'interactive' && (
+              <InteractiveSupportGrid
+                items={filteredTickets}
+                loading={loading}
+                renderItem={renderTicketCard}
+                isReady={animationReady}
+              />
+            )}
+            
+            {viewMode === 'list' && (
+              <Card>
+                <CardContent className="p-0">
+                  <div className="relative w-full overflow-x-auto">
+                    <table className="w-full text-sm text-left">
+                      <thead className="text-xs uppercase bg-muted/50">
+                        <tr>
+                          <th className="px-4 py-3">Numéro</th>
+                          <th className="px-4 py-3">Sujet</th>
+                          <th className="px-4 py-3 hidden md:table-cell">Entreprise</th>
+                          <th className="px-4 py-3">Statut</th>
+                          <th className="px-4 py-3 hidden md:table-cell">Priorité</th>
+                          <th className="px-4 py-3 hidden md:table-cell">Créé le</th>
+                          <th className="px-4 py-3 text-right">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredTickets.map((ticket) => (
+                          <tr key={ticket.id} className="border-t hover:bg-muted/30">
+                            <td className="px-4 py-3">#{ticket.number}</td>
+                            <td className="px-4 py-3 font-medium">{ticket.subject}</td>
+                            <td className="px-4 py-3 hidden md:table-cell">{ticket.companyName || '-'}</td>
+                            <td className="px-4 py-3">
+                              <span className={cn(
+                                "px-2 py-1 text-xs rounded-full",
+                                ticket.status === 'open' && "bg-blue-100 text-blue-800",
+                                ticket.status === 'in_progress' && "bg-yellow-100 text-yellow-800",
+                                ticket.status === 'resolved' && "bg-green-100 text-green-800",
+                                ticket.status === 'closed' && "bg-gray-100 text-gray-800"
+                              )}>
+                                {ticket.status.replace(/_/g, ' ')}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 hidden md:table-cell capitalize">{ticket.priority}</td>
+                            <td className="px-4 py-3 hidden md:table-cell">{formatDate(new Date(ticket.createdAt))}</td>
+                            <td className="px-4 py-3 text-right">
+                              <Button variant="ghost" size="sm" onClick={() => handleViewDetails(ticket)}>
+                                <Eye className="h-4 w-4 mr-1" /> Détails
+                              </Button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    {filteredTickets.length === 0 && (
+                      <div className="py-12 text-center">
+                        <p className="text-muted-foreground">Aucun ticket ne correspond à vos critères.</p>
                       </div>
-                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
-                        <div className="flex items-center gap-1"><Building className="h-4 w-4" /><span>{ticket.companyName}</span></div>
-                        <div className="flex items-center gap-1"><Calendar className="h-4 w-4" /><span>Créé le {formatDate(ticket.createdAt)}</span></div>
-                        <div className="flex items-center gap-1"><User className="h-4 w-4" /><span>{ticket.messages.length} message(s)</span></div>
-                        {ticket.assignedTo && (<div className="flex items-center gap-1"><User className="h-4 w-4" /><span>Assigné à: {ticket.assignedTo}</span></div>)}
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-end flex-shrink-0 w-full sm:w-auto gap-2">
-                      {getStatusBadge(ticket.status)}
-                      {getPriorityBadge(ticket.priority)}
-                      <Dialog open={selectedTicket?.id === ticket.id} onOpenChange={(open) => { if (!open) { setSelectedTicket(null); setIsModalFullScreen(false); } else { openTicketDetailsDialog(ticket); } }}>
-                        <DialogTrigger asChild><Button variant="outline" size="sm"><Eye className="h-4 w-4 mr-2" />Voir</Button></DialogTrigger>
-                        <DialogContent className={cn("flex flex-col transition-all duration-300 ease-in-out", isModalFullScreen ? "fixed inset-0 w-screen h-screen max-w-none rounded-none p-0" : "sm:max-w-[800px] max-h-[90vh] p-0")}>
-                          <DialogHeader className="p-6 pb-4 border-b flex-shrink-0">
-                            <DialogTitle>Ticket {selectedTicket?.number}</DialogTitle>
-                            <DialogDescription>Détails et conversation pour le ticket {selectedTicket?.subject}</DialogDescription>
-                            <Button variant="ghost" size="icon" onClick={() => setIsModalFullScreen(!isModalFullScreen)} className="absolute top-4 right-4 text-muted-foreground hover:text-foreground h-8 w-8" title={isModalFullScreen ? "Réduire" : "Agrandir"}>
-                              {isModalFullScreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
-                            </Button>
-                          </DialogHeader>
-                          {selectedTicket && (
-                              <>
-                                <div className="flex-grow overflow-y-auto p-6 space-y-6">
-                                  {/* Section Détails du Ticket */}
-                                  <FormSection>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-muted/50 rounded-lg">
-                                      <div className={styles.inputGroup}><Label className={styles.label}>Sujet</Label><p className="text-sm text-foreground">{selectedTicket.subject}</p></div>
-                                      <div className={styles.inputGroup}><Label className={styles.label}>Entreprise</Label><p className="text-sm text-foreground">{selectedTicket.companyName}</p></div>
-                                      <div className={styles.inputGroup}><Label className={styles.label}>Créé le</Label><p className="text-sm text-foreground">{formatDateTime(selectedTicket.createdAt)}</p></div>
-                                      <div className={styles.inputGroup}><Label className={styles.label}>Dernière MàJ</Label><p className="text-sm text-foreground">{formatDateTime(selectedTicket.updatedAt)}</p></div>
-                                      <div className={styles.inputGroup}><Label htmlFor="ticketStatusAdmin" className={styles.label}>Statut</Label><Select value={editingTicketStatus} onValueChange={(val) => setEditingTicketStatus(val as Ticket['status'])} disabled={actionLoading === `details-${selectedTicket.id}`}><SelectTrigger id="ticketStatusAdmin" className="mt-1 h-9 text-sm"><SelectValue /></SelectTrigger><SelectContent>{availableStatuses.map(s => (<SelectItem key={s} value={s} className="capitalize">{s.replace(/_/g, ' ')}</SelectItem>))}</SelectContent></Select></div>
-                                      <div className={styles.inputGroup}><Label htmlFor="ticketPriorityAdmin" className={styles.label}>Priorité</Label><Select value={editingTicketPriority} onValueChange={(val) => setEditingTicketPriority(val as Ticket['priority'])} disabled={actionLoading === `details-${selectedTicket.id}`}><SelectTrigger id="ticketPriorityAdmin" className="mt-1 h-9 text-sm"><SelectValue /></SelectTrigger><SelectContent>{availablePriorities.map(p => (<SelectItem key={p} value={p} className="capitalize">{p}</SelectItem>))}</SelectContent></Select></div>
-                                      <div className={styles.inputGroup}><Label htmlFor="ticketCategoryAdmin" className={styles.label}>Catégorie</Label><Select value={editingTicketCategoryId || ''} onValueChange={setEditingTicketCategoryId} disabled={actionLoading === `details-${selectedTicket.id}`}><SelectTrigger id="ticketCategoryAdmin" className="mt-1 h-9 text-sm"><SelectValue placeholder="Changer catégorie" /></SelectTrigger><SelectContent>{categories.map(category => (<SelectItem key={category.id} value={category.id}>{category.name}</SelectItem>))}</SelectContent></Select></div>
-                                      <div className={styles.inputGroup}><Label htmlFor="ticketAssignedToAdmin" className={styles.label}>Assigné à</Label><Input id="ticketAssignedToAdmin" value={editingTicketAssignedTo || ''} onChange={(e) => setEditingTicketAssignedTo(e.target.value)} placeholder="Nom de l'agent" className="mt-1 h-9 text-sm" disabled={actionLoading === `details-${selectedTicket.id}`} /></div>
-                                    </div>
-                                  </FormSection>
-                                  <div className="mt-4"><strong className="text-sm text-foreground">Description initiale:</strong><p className="text-sm text-muted-foreground mt-1 whitespace-pre-wrap">{selectedTicket.description}</p></div>
-
-                                  {/* Section Conversation */}
-                                  <div className="space-y-4">
-                                    <h4 className="font-medium text-foreground">Conversation</h4>
-                                    <div className="space-y-3 border rounded-md p-3 bg-background max-h-[350px] overflow-y-auto">
-                                      {selectedTicket.messages.length === 0 && (<p className="text-xs text-muted-foreground text-center py-4">Aucun message.</p>)}
-                                      {selectedTicket.messages.map((message) => (
-                                          <div key={message.id} className={cn("p-2.5 rounded-lg text-sm", message.authorRole === 'admin' ? "bg-primary/10 border-l-2 border-primary" : "bg-muted")}>
-                                            <div className="flex justify-between items-center mb-1"><span className="font-semibold text-foreground">{message.authorName} {message.authorRole === 'admin' && '(Support)'}</span><span className="text-xs text-muted-foreground">{formatDateTime(message.createdAt)}</span></div>
-                                            <p className="text-foreground whitespace-pre-wrap">{message.content}</p>
-                                          </div>
-                                      ))}
-                                      <div ref={messagesEndRef} />
-                                    </div>
-                                  </div>
-
-                                  {/* Section Réponse */}
-                                  {selectedTicket.status !== 'closed' && (
-                                      <div className="pt-4 border-t">
-                                        <Label htmlFor="replyMessageAdmin" className={styles.label}>Votre réponse</Label>
-                                        <Textarea id="replyMessageAdmin" value={replyMessage} onChange={(e) => setReplyMessage(e.target.value)} placeholder="Tapez votre message..." rows={3} className="text-sm mt-1" />
-                                        <div className="flex justify-end mt-2">
-                                          <Button onClick={handleSendReply} disabled={!replyMessage.trim() || actionLoading === `message-${selectedTicket.id}`} className="flex items-center gap-2" size="sm">
-                                            <Send className="h-3.5 w-3.5" />
-                                            {actionLoading === `message-${selectedTicket.id}` ? 'Envoi...' : 'Envoyer'}
-                                          </Button>
-                                        </div>
-                                      </div>
-                                  )}
-                                </div>
-                                {/* Footer pour actions admin */}
-                                <DialogFooter className="p-6 border-t flex-shrink-0 flex flex-col sm:flex-row justify-between items-center gap-2">
-                                  <div>
-                                    <Button onClick={handleUpdateTicketDetails} disabled={actionLoading === `details-${selectedTicket.id}`}>
-                                      {actionLoading === `details-${selectedTicket.id}` ? 'Sauvegarde...' : 'Sauvegarder les modifications'}
-                                    </Button>
-                                  </div>
-                                  <div>
-                                    <AlertDialog open={!!ticketToDelete && ticketToDelete.id === selectedTicket.id} onOpenChange={(open) => !open && setTicketToDelete(null)}>
-                                      <AlertDialogTrigger asChild>
-                                        <Button variant="destructive" size="sm" onClick={() => setTicketToDelete(selectedTicket)} disabled={actionLoading === `delete-${selectedTicket.id}`} className="flex items-center gap-1.5">
-                                          <Trash2 className="h-4 w-4" />Supprimer
-                                        </Button>
-                                      </AlertDialogTrigger>
-                                      {ticketToDelete && ticketToDelete.id === selectedTicket.id && (
-                                          <AlertDialogContent>
-                                            <AlertDialogHeader>
-                                              <AlertDialogTitle>Confirmer la suppression</AlertDialogTitle>
-                                              <AlertDialogDescription>
-                                                Êtes-vous sûr de vouloir supprimer le ticket N°{ticketToDelete.number} ({ticketToDelete.subject}) ? Cette action est irréversible.
-                                              </AlertDialogDescription>
-                                            </AlertDialogHeader>
-                                            <AlertDialogFooter>
-                                              <AlertDialogCancel onClick={() => setTicketToDelete(null)}>Annuler</AlertDialogCancel>
-                                              <AlertDialogAction onClick={handleDeleteTicket} className="bg-destructive hover:bg-destructive/90">
-                                                {actionLoading === `delete-${ticketToDelete.id}` ? 'Suppression...' : 'Confirmer la suppression'}
-                                              </AlertDialogAction>
-                                            </AlertDialogFooter>
-                                          </AlertDialogContent>
-                                      )}
-                                    </AlertDialog>
-                                  </div>
-                                </DialogFooter>
-                              </>
-                          )}
-                        </DialogContent>
-                      </Dialog>
-                    </div>
+                    )}
                   </div>
                 </CardContent>
               </Card>
-          ))}
-          {filteredTickets.length === 0 && !loading && (
-              <Card><CardContent className="p-8 text-center"><MessageSquare className="h-12 w-12 text-muted-foreground/50 mx-auto mb-4" /><p className="text-muted-foreground">Aucun ticket trouvé</p></CardContent></Card>
-          )}
-        </div>
+            )}
+          </motion.div>
+        </AnimatePresence>
       </div>
+
+      {/* Vue détaillée du ticket */}
+      <TicketDetailView
+        ticket={selectedTicket}
+        isAdmin={true}
+        isOpen={!!selectedTicket}
+        onOpenChange={(open) => {
+          if (!open) setSelectedTicket(null);
+        }}
+        onSendMessage={handleSendReply}
+        onUpdateDetails={handleUpdateTicketDetails}
+        isSending={!!actionLoading && actionLoading.startsWith('message-')}
+      />
+      
+      {/* Dialog de confirmation pour la suppression */}
+      <ConfirmationDialog
+        isOpen={!!ticketToDelete}
+        onClose={() => setTicketToDelete(null)}
+        onConfirm={handleDeleteTicket}
+        title="Confirmer la suppression"
+        description={`Êtes-vous sûr de vouloir supprimer le ticket ${ticketToDelete?.number} ? Cette action est irréversible.`}
+        confirmText="Supprimer"
+        cancelText="Annuler"
+        isLoading={!!actionLoading && actionLoading.startsWith('delete-')}
+      />
+
+      {/* Bouton pour supprimer le ticket actuel */}
+      {selectedTicket && (
+        <div className="fixed bottom-4 right-4">
+          <Button 
+            variant="destructive" 
+            onClick={() => setTicketToDelete(selectedTicket)}
+          >
+            Supprimer ce ticket
+          </Button>
+        </div>
+      )}
+    </div>
   );
 };
 

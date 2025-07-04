@@ -1,0 +1,529 @@
+// src/pages/Dashboard.tsx
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '@/context/AuthContext';
+import { Diagnostics } from '@/lib/diagnostics';
+import StatsCard from '@/components/dashboard/StatsCard';
+import RecentActivity from '@/components/dashboard/RecentActivity';
+import { devisApi, invoicesApi, ticketsApi, companiesApi, usersApi } from '@/services/api';
+import { Devis, Invoice, Ticket } from '@/types';
+import {
+  CreditCard,
+  FileText,
+  MessageSquare,
+  TrendingUp,
+  Users,
+  Building,
+  PlusCircle,
+  Eye,
+  ClipboardList,
+  WifiOff
+} from 'lucide-react';
+import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
+import { errorReporter } from '@/lib/errorReporter';
+import { useLocalStorageCache } from '@/lib/cache';
+
+// Utilisation du hook de cache importé de lib/cache.ts
+
+const Dashboard = () => {
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const [devisList, setDevisList] = useState<Devis[]>([]);
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [tickets, setTickets] = useState<Ticket[]>([]);
+  const [companiesCount, setCompaniesCount] = useState(0);
+  const [usersCount, setUsersCount] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [isOffline, setIsOffline] = useState(!navigator.onLine);
+  
+  // Référence pour suivre si le composant est monté
+  const isMounted = useRef(true);
+
+  // Cache pour les données peu fréquemment mises à jour
+  const { getData: getCompaniesCount, setData: setCachedCompaniesCount, invalidateData: invalidateCompaniesCount } = 
+    useLocalStorageCache<number>('companiesCount', 5 * 60 * 1000); // 5 minutes
+  const { getData: getUsersCount, setData: setCachedUsersCount, invalidateData: invalidateUsersCount } = 
+    useLocalStorageCache<number>('usersCount', 5 * 60 * 1000); // 5 minutes
+
+  const formatCurrencyLocal = useCallback((amount: number) => {
+    return `${amount.toLocaleString('fr-FR')} FCFA`;
+  }, []);
+
+  // Fonction pour mettre à jour l'état de connectivité
+  const updateOnlineStatus = useCallback(() => {
+    if (isMounted.current) {
+      const online = navigator.onLine;
+      setIsOffline(!online);
+      if (online && loadError) {
+        // Si on retrouve la connexion après une erreur, on peut réessayer de charger
+        setLoadError(null);
+        loadDashboardData();
+      }
+      
+      Diagnostics.log('Network', `Connectivity changed: ${online ? 'online' : 'offline'}`);
+    }
+  }, [loadError]);
+
+  // Gestionnaires d'événements réseau
+  useEffect(() => {
+    window.addEventListener('online', updateOnlineStatus);
+    window.addEventListener('offline', updateOnlineStatus);
+    
+    return () => {
+      window.removeEventListener('online', updateOnlineStatus);
+      window.removeEventListener('offline', updateOnlineStatus);
+    };
+  }, [updateOnlineStatus]);
+
+  // Marquer le composant comme démonté lors du nettoyage
+  useEffect(() => {
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
+
+  // Simplification drastique de la fonction de chargement pour corriger le problème de boucle
+  const loadDashboardData = useCallback(async () => {
+    Diagnostics.log('Dashboard', 'Chargement des données du dashboard...');
+    
+    if (!isMounted.current) {
+      Diagnostics.log('Dashboard', 'Tentative de charger des données avec composant démonté');
+      return;
+    }
+    
+    if (isOffline) {
+      Diagnostics.log('Dashboard', 'Mode hors ligne détecté - utilisation des données en cache si disponibles');
+      setLoading(false);
+      return;
+    }
+    
+    setLoading(true);
+    setLoadError(null);
+    
+    try {
+      // Chargement en parallèle pour optimiser les performances
+      const loadDevis = (user?.role === 'admin' ? devisApi.getAll() : devisApi.getByCompany(user?.companyId || '')).catch((err: unknown) => {
+        errorReporter.captureException(err, { 
+          component: 'Dashboard', 
+          action: 'loadDevis'
+        });
+        return [] as Devis[];
+      });
+      
+      const loadInvoices = (user?.role === 'admin' ? invoicesApi.getAll() : invoicesApi.getByCompany(user?.companyId || '')).catch((err: unknown) => {
+        errorReporter.captureException(err, { 
+          component: 'Dashboard', 
+          action: 'loadInvoices'
+        });
+        return [] as Invoice[];
+      });
+      
+      const loadTickets = (user?.role === 'admin' ? ticketsApi.getAll() : ticketsApi.getByCompany(user?.companyId || '')).catch((err: unknown) => {
+        errorReporter.captureException(err, { 
+          component: 'Dashboard', 
+          action: 'loadTickets'
+        });
+        return [] as Ticket[];
+      });
+      
+      // Essayer d'utiliser le cache d'abord pour les données statiques
+      let companies = getCompaniesCount();
+      if (companies === null) {
+        try {
+          const allCompanies = await companiesApi.getAll();
+          companies = allCompanies.length;
+          if (companies !== null) {
+            setCompaniesCount(companies);
+            setCachedCompaniesCount(companies);
+          }
+        } catch (err: unknown) {
+          errorReporter.captureException(err, {
+            component: 'Dashboard',
+            action: 'loadCompaniesCount'
+          });
+        }
+      }
+      
+      let users = getUsersCount();
+      if (users === null) {
+        try {
+          const allUsers = await usersApi.getAll();
+          users = allUsers.length;
+          if (users !== null) {
+            setUsersCount(users);
+            setCachedUsersCount(users);
+          }
+        } catch (err: unknown) {
+          errorReporter.captureException(err, {
+            component: 'Dashboard',
+            action: 'loadUsersCount'
+          });
+        }
+      }
+      
+      // Attendre tous les chargements critiques pour l'affichage
+      const [devis, invoicesData, ticketsData] = await Promise.all([
+        loadDevis,
+        loadInvoices,
+        loadTickets
+      ]);
+      
+      if (isMounted.current) {
+        setDevisList(devis);
+        setInvoices(invoicesData);
+        setTickets(ticketsData);
+        if (companies !== null) setCompaniesCount(companies);
+        if (users !== null) setUsersCount(users);
+        setLoading(false);
+      }
+      
+      Diagnostics.log('Dashboard', 'Données chargées avec succès');
+    } catch (error) {
+      if (isMounted.current) {
+        const errorMessage = error instanceof Error ? error.message : 'Une erreur s\'est produite';
+        setLoadError(errorMessage);
+        setLoading(false);
+        errorReporter.captureException(error, {
+          component: 'Dashboard',
+          action: 'loadDashboardData'
+        });
+        toast.error('Impossible de charger les données du dashboard');
+      }
+      Diagnostics.log('Dashboard', 'Erreur de chargement des données', error);
+    }
+  }, [isOffline, getCompaniesCount, getUsersCount, setCompaniesCount, setUsersCount, setCachedCompaniesCount, setCachedUsersCount, user]);
+
+  // Stats préparés avec useMemo pour éviter les recalculs inutiles
+  const stats = useMemo(() => {
+    const totalAmount = invoices.reduce((sum, invoice) => sum + parseFloat(invoice.amount.toString()), 0);
+    const pendingAmount = invoices
+      .filter(invoice => invoice.status !== 'paid')
+      .reduce((sum, invoice) => sum + parseFloat(invoice.amount.toString()), 0);
+    const pendingCount = invoices.filter(invoice => invoice.status !== 'paid').length;
+    
+    const recentDevis = devisList
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, 5);
+      
+    const openTicketsCount = tickets.filter(ticket => ticket.status !== 'closed').length;
+    
+    return {
+      totalAmount,
+      pendingAmount,
+      pendingCount,
+      recentDevis,
+      openTicketsCount,
+      devisCount: devisList.length,
+      invoiceCount: invoices.length,
+      ticketCount: tickets.length
+    };
+  }, [devisList, invoices, tickets]);
+
+  useEffect(() => {
+    // Marquer le composant comme monté
+    isMounted.current = true;
+    console.log('[Dashboard] Composant monté');
+    
+    // Chargement initial des données seulement si en ligne
+    if (navigator.onLine) {
+      loadDashboardData();
+    }
+    
+    // Nettoyage à la démontage du composant
+    return () => {
+      console.log('[Dashboard] Composant démonté');
+      isMounted.current = false;
+    };
+  }, [loadDashboardData]);
+
+  const pendingDevis = devisList.filter(d => d.status === 'pending' || d.status === 'sent').length;
+  const totalDevisAmount = devisList.filter(d => d.status !== 'rejected' && d.status !== 'expired').reduce((sum, d) => sum + d.amount, 0);
+  const pendingInvoices = invoices.filter(i => i.status === 'pending' || i.status === 'overdue').length;
+  const totalInvoiceAmount = invoices.filter(i => i.status !== 'cancelled').reduce((sum, i) => sum + i.amount, 0);
+  const openTickets = tickets.filter(t => t.status === 'open' || t.status === 'in_progress' || t.status === 'pending_admin_response' || t.status === 'pending_client_response').length;
+
+  const recentActivities = [
+    ...devisList.slice(0, 3).map(d => ({
+      id: d.id,
+      type: 'devis' as const,
+      title: d.object,
+      description: `Devis ${d.number} - ${formatCurrencyLocal(d.amount)}`,
+      date: new Date(d.createdAt),
+      status: d.status
+    })),
+    ...invoices.slice(0, 3).map(i => ({
+      id: i.id,
+      type: 'invoice' as const,
+      title: `Facture ${i.number}`,
+      description: `${formatCurrencyLocal(i.amount)}`,
+      date: new Date(i.createdAt),
+      status: i.status
+    })),
+    ...tickets.slice(0, 3).map(t => ({
+      id: t.id,
+      type: 'ticket' as const,
+      title: t.subject,
+      description: `Ticket ${t.number}`,
+      date: new Date(t.createdAt),
+      status: t.status
+    }))
+  ].sort((a, b) => b.date.getTime() - a.date.getTime()).slice(0, 5);
+
+  const handleCreateDevis = () => {
+    navigate('/admin/devis', { state: { openCreateDevisDialog: true } });
+  };
+
+  const handleManageUsers = () => {
+    navigate('/admin/users');
+  };
+
+  const handleCreateTicket = () => {
+    navigate('/support', { state: { openCreateTicketDialog: true } });
+  };
+
+  const handleViewPendingDevis = () => {
+    navigate('/devis');
+  };
+
+  // Composant pour le mode hors ligne
+  const OfflineMessage = () => (
+    <div className="w-full p-8 bg-gray-50 rounded-lg border border-gray-200 shadow-sm flex flex-col items-center justify-center text-center">
+      <WifiOff className="text-amber-500 w-12 h-12 mb-4" />
+      <h2 className="text-2xl font-semibold text-gray-800 mb-2">Mode hors ligne</h2>
+      <p className="text-gray-600 mb-4 max-w-md">
+        Vous êtes actuellement en mode hors ligne. Certaines fonctionnalités peuvent ne pas être disponibles.
+        Nous affichons les dernières données disponibles en cache.
+      </p>
+      <button 
+        onClick={() => window.location.reload()} 
+        className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+      >
+        Actualiser
+      </button>
+    </div>
+  );
+
+  // Composant pour les erreurs de chargement
+  const ErrorMessage = ({ message }: { message: string }) => (
+    <div className="w-full p-8 bg-red-50 rounded-lg border border-red-200 shadow-sm flex flex-col items-center justify-center text-center">
+      <div className="text-red-500 w-12 h-12 mb-4">⚠️</div>
+      <h2 className="text-2xl font-semibold text-gray-800 mb-2">Erreur de chargement</h2>
+      <p className="text-gray-600 mb-4 max-w-md">{message}</p>
+      <button 
+        onClick={() => window.location.reload()} 
+        className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+      >
+        Réessayer
+      </button>
+    </div>
+  );
+
+  // Afficher un état spécial pour le mode hors connexion sans données en cache
+  if (isOffline && loading) {
+    return <OfflineMessage />;
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-arcadis-orange mx-auto"></div>
+          <p className="mt-4 text-slate-600">Chargement du tableau de bord...</p>
+        </div>
+      </div>
+    );
+  }
+  
+  if (loadError) {
+    return <ErrorMessage message={loadError} />;
+  }
+
+  return (
+    <div className="space-y-6 animate-fade-in">
+      {isOffline && (
+        <div className="bg-amber-50 border-l-4 border-amber-400 p-4 rounded-md mb-4">
+          <div className="flex items-center">
+            <WifiOff className="h-5 w-5 text-amber-500 mr-2" />
+            <p className="text-amber-800">
+              Vous êtes actuellement en mode hors ligne. Les données affichées peuvent ne pas être à jour.
+            </p>
+          </div>
+        </div>
+      )}
+      
+      <div>
+        <h1 className="text-3xl font-bold text-foreground">
+          Tableau de Bord
+        </h1>
+        <p className="text-muted-foreground mt-2">
+          {user?.role === 'admin'
+            ? 'Vue d\'ensemble de l\'activité du portail.'
+            : `Bienvenue, ${user?.firstName} ${user?.lastName} !`
+          }
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        {user?.role === 'admin' ? (
+            <>
+              <StatsCard
+                  title="Total Entreprises"
+                  value={companiesCount.toString()}
+                  description="Clients actifs"
+                  icon={Building}
+                  onClick={() => navigate('/admin/companies')}
+              />
+              <StatsCard
+                  title="Utilisateurs Actifs"
+                  value={usersCount.toString()}
+                  description="Comptes enregistrés"
+                  icon={Users}
+                  onClick={() => navigate('/admin/users')}
+              />
+              <StatsCard
+                  title="Chiffre d'affaires (Facturé)"
+                  value={formatCurrencyLocal(totalInvoiceAmount)}
+                  description="Total des factures non annulées"
+                  icon={TrendingUp}
+                  onClick={() => navigate('/admin/factures')}
+              />
+              <StatsCard
+                  title="Tickets Ouverts"
+                  value={openTickets.toString()}
+                  description="Nécessitent une attention"
+                  icon={MessageSquare}
+                  onClick={() => navigate('/admin/support')}
+              />
+            </>
+        ) : (
+            <>
+              <StatsCard
+                  title="Devis en Attente"
+                  value={pendingDevis.toString()}
+                  description="Nécessitent votre réponse"
+                  icon={FileText}
+                  onClick={() => navigate('/devis')}
+              />
+              <StatsCard
+                  title="Montant Total Devis"
+                  value={formatCurrencyLocal(totalDevisAmount)}
+                  description="Valeur des devis actifs"
+                  icon={TrendingUp}
+                  onClick={() => navigate('/devis')}
+              />
+              <StatsCard
+                  title="Factures en Attente"
+                  value={pendingInvoices.toString()}
+                  description="À régler"
+                  icon={CreditCard}
+                  onClick={() => navigate('/factures')}
+              />
+              <StatsCard
+                  title="Tickets Ouverts"
+                  value={openTickets.toString()}
+                  description="Support en cours"
+                  icon={MessageSquare}
+                  onClick={() => navigate('/support')}
+              />
+            </>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2">
+          {/* MODIFIÉ ICI: Ajout de la prop userRole */}
+          <RecentActivity activities={recentActivities} userRole={user?.role} />
+        </div>
+
+        <div className="bg-card text-card-foreground rounded-lg shadow-sm p-6">
+          <h3 className="text-lg font-semibold text-card-foreground mb-4">
+            Actions Rapides
+          </h3>
+          <div className="space-y-3">
+            {user?.role === 'admin' ? (
+                <>
+                  <button
+                      onClick={handleCreateDevis}
+                      className="w-full p-3 text-left bg-background hover:bg-muted rounded-lg transition-all duration-200 flex items-center gap-3 border border-border hover:border-primary/50"
+                  >
+                    <PlusCircle className="h-5 w-5 text-primary" />
+                    <div>
+                      <div className="font-medium text-foreground">Créer un devis</div>
+                      <div className="text-sm text-muted-foreground">Générer une nouvelle proposition</div>
+                    </div>
+                  </button>
+                  <button
+                      onClick={() => navigate('/admin/devis')}
+                      className="w-full p-3 text-left bg-background hover:bg-muted rounded-lg transition-all duration-200 flex items-center gap-3 border border-border hover:border-primary/50"
+                  >
+                    <ClipboardList className="h-5 w-5 text-primary" />
+                    <div>
+                      <div className="font-medium text-foreground">Gérer les Devis</div>
+                      <div className="text-sm text-muted-foreground">Consulter et administrer les devis</div>
+                    </div>
+                  </button>
+                  <button
+                      onClick={() => navigate('/admin/factures', { state: { openCreateFactureDialog: true }})}
+                      className="w-full p-3 text-left bg-background hover:bg-muted rounded-lg transition-all duration-200 flex items-center gap-3 border border-border hover:border-primary/50"
+                  >
+                    <CreditCard className="h-5 w-5 text-primary" />
+                    <div>
+                      <div className="font-medium text-foreground">Créer une facture</div>
+                      <div className="text-sm text-muted-foreground">Émettre une nouvelle facture</div>
+                    </div>
+                  </button>
+                  <button
+                      onClick={handleManageUsers}
+                      className="w-full p-3 text-left bg-background hover:bg-muted rounded-lg transition-all duration-200 flex items-center gap-3 border border-border hover:border-primary/50"
+                  >
+                    <Users className="h-5 w-5 text-primary" />
+                    <div>
+                      <div className="font-medium text-foreground">Gérer les utilisateurs</div>
+                      <div className="text-sm text-muted-foreground">Administrer les comptes</div>
+                    </div>
+                  </button>
+                </>
+            ) : (
+                <>
+                  <button
+                      onClick={handleCreateTicket}
+                      className="w-full p-3 text-left bg-background hover:bg-muted rounded-lg transition-all duration-200 flex items-center gap-3 border border-border hover:border-primary/50"
+                  >
+                    <MessageSquare className="h-5 w-5 text-primary" />
+                    <div>
+                      <div className="font-medium text-foreground">Ouvrir un ticket</div>
+                      <div className="text-sm text-muted-foreground">Demander de l'assistance</div>
+                    </div>
+                  </button>
+                  <button
+                      onClick={handleViewPendingDevis}
+                      className="w-full p-3 text-left bg-background hover:bg-muted rounded-lg transition-all duration-200 flex items-center gap-3 border border-border hover:border-primary/50"
+                  >
+                    <Eye className="h-5 w-5 text-primary" />
+                    <div>
+                      <div className="font-medium text-foreground">Voir mes devis</div>
+                      <div className="text-sm text-muted-foreground">Consulter vos propositions</div>
+                    </div>
+                  </button>
+                  <button
+                      onClick={() => navigate('/factures')}
+                      className="w-full p-3 text-left bg-background hover:bg-muted rounded-lg transition-all duration-200 flex items-center gap-3 border border-border hover:border-primary/50"
+                  >
+                    <CreditCard className="h-5 w-5 text-primary" />
+                    <div>
+                      <div className="font-medium text-foreground">Voir mes factures</div>
+                      <div className="text-sm text-muted-foreground">Suivre vos paiements</div>
+                    </div>
+                  </button>
+                </>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default Dashboard;

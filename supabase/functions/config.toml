@@ -1,0 +1,38 @@
+# Configuration des fonctions Edge Supabase
+# Ce fichier permet de configurer les variables d'environnement et les secrets
+# pour toutes les fonctions Edge ou pour des fonctions spécifiques
+
+[global]
+# Variables globales accessibles à toutes les fonctions
+# Pour le développement local, utiliser localhost
+SITE_URL = "http://localhost:8080"
+# SITE_URL = "https://myspace.arcadis.tech"  # Production
+DEXCHANGE_API_BASE_URL = "https://api-m.dexchange.sn/api/v1"
+DEXCHANGE_API_KEY = "API-CU-6TSJQOB-9Z5-1I5-MX"
+GCP_RELAY_URL = "https://dexchange-api-relay-iba6qzqjtq-ew.a.run.app"
+GCP_RELAY_SECRET = "4rNg02t+qdk5Jr/2+NT0kLCKavbtyWRUlM1prWAMNnU="
+RELAY_SECRET = "4rNg02t+qdk5Jr/2+NT0kLCKavbtyWRUlM1prWAMNnU="
+LOG_EXECUTION_ID = "true"
+
+[global.env_variables]
+# Variables d'environnement globales (utilisant la fonction env())
+SUPABASE_URL = { value = "env(SUPABASE_URL)" }
+SUPABASE_SERVICE_ROLE_KEY = { value = "env(SUPABASE_SERVICE_ROLE_KEY)" }
+DEXCHANGE_WEBHOOK_SECRET = { value = "env(DEXCHANGE_WEBHOOK_SECRET)" }
+
+# Configuration spécifique pour la fonction dexchange-callback-handler
+[functions.dexchange-callback-handler]
+verify_jwt = false  # Ne pas vérifier le JWT pour cette fonction (webhook externe)
+DEXCHANGE_CALLBACK_URL = "https://qlqgyrfqiflnqknbtycw.supabase.co/functions/v1/dexchange-callback-handler"
+
+# Configuration pour la fonction de marquage manuel comme payé
+[functions.mark-invoice-paid]
+verify_jwt = false  # Ne pas vérifier le JWT pour cette fonction (test manuel)
+
+# Configuration pour le test de webhook
+[functions.test-webhook]
+verify_jwt = false  # Ne pas vérifier le JWT pour cette fonction (test)
+
+# Configuration pour la vérification automatique du statut Wave
+[functions.check-wave-status]
+verify_jwt = false  # Ne pas vérifier le JWT pour cette fonction

@@ -1,22 +1,42 @@
 // src/components/auth/LoginForm.tsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Mail, KeyRound } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 
 const LoginForm = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const { login, isLoading, error } = useAuth();
+  const { login, isLoading, error, user } = useAuth();
+  const navigate = useNavigate();
+  
+  // Gérer la redirection après une connexion réussie
+  useEffect(() => {
+    if (user) {
+      // Utiliser les fonctions importées du context pour gérer la redirection
+      import('@/context/AuthContext').then(({ getRedirectUrl, clearRedirectUrl }) => {
+        const redirectPath = getRedirectUrl();
+        if (redirectPath) {
+          // Effacer la redirection stockée et naviguer vers cette page
+          clearRedirectUrl();
+          navigate(redirectPath, { replace: true });
+        } else {
+          // Redirection par défaut en fonction du rôle
+          navigate(user.role === 'admin' ? '/admin/dashboard' : '/dashboard', { replace: true });
+        }
+      });
+    }
+  }, [user, navigate]);
 
   const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     try {
       await login({ email, password });
+      // La redirection est gérée par l'effect ci-dessus
     } catch (err) {
       // L'erreur est gérée dans AuthContext et affichée via l'état `error`
       console.error("Login failed from form:", err);

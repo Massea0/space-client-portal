@@ -1,0 +1,748 @@
+// src/pages/Dashboard.tsx (nouvelle version avec animations cohérentes)
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '@/context/AuthContext';
+import { Diagnostics } from '@/lib/diagnostics';
+import { devisApi, invoicesApi, ticketsApi, companiesApi, usersApi } from '@/services/api';
+import { Devis, Invoice, Ticket } from '@/types';
+import { motion, AnimatePresence } from 'framer-motion';
+import {
+  CreditCard,
+  FileText,
+  MessageSquare,
+  TrendingUp,
+  Users,
+  Building,
+  PlusCircle,
+  Eye,
+  ClipboardList,
+  WifiOff,
+  RefreshCw,
+  LayoutGrid,
+  List,
+  Zap,
+  Filter,
+  Search
+} from 'lucide-react';
+import { notificationManager } from '@/components/ui/notification-provider';
+import { cn, formatCurrency, formatDate } from '@/lib/utils';
+import { errorReporter } from '@/lib/errorReporter';
+import { useLocalStorageCache } from '@/lib/cache';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from '@/components/ui/select';
+
+// Import des nouveaux composants interactifs du showcase
+import {
+  InteractiveStatsCard,
+  InteractiveActivityCard,
+  InteractiveDashboardGrid,
+  ActivityItem
+} from '@/components/modules/dashboard';
+
+// Type pour les modes d'affichage disponibles
+type ViewMode = 'cards' | 'list';
+
+const Dashboard = () => {
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const [devisList, setDevisList] = useState<Devis[]>([]);
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [tickets, setTickets] = useState<Ticket[]>([]);
+  const [companiesCount, setCompaniesCount] = useState(0);
+  const [usersCount, setUsersCount] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [isOffline, setIsOffline] = useState(!navigator.onLine);
+  const [viewMode, setViewMode] = useState<ViewMode>('cards');
+  const [animationReady, setAnimationReady] = useState(false);
+  
+  // Référence pour suivre si le composant est monté
+  const isMounted = useRef(true);
+
+  // Cache pour les données peu fréquemment mises à jour
+  const { getData: getCompaniesCount, setData: setCachedCompaniesCount } = 
+    useLocalStorageCache<number>('companiesCount', 5 * 60 * 1000); // 5 minutes
+  const { getData: getUsersCount, setData: setCachedUsersCount } = 
+    useLocalStorageCache<number>('usersCount', 5 * 60 * 1000); // 5 minutes
+
+  const formatCurrencyLocal = useCallback((amount: number) => {
+    return formatCurrency(amount);
+  }, []);
+
+  // Fonction pour mettre à jour l'état de connectivité
+  const updateOnlineStatus = useCallback(() => {
+    if (isMounted.current) {
+      const online = navigator.onLine;
+      setIsOffline(!online);
+      if (online && loadError) {
+        // Si on retrouve la connexion après une erreur, on peut réessayer de charger
+        setLoadError(null);
+        loadDashboardData();
+      }
+      
+      Diagnostics.log('Network', `Connectivity changed: ${online ? 'online' : 'offline'}`);
+    }
+  }, [loadError]);
+
+  // Gestionnaires d'événements réseau
+  useEffect(() => {
+    window.addEventListener('online', updateOnlineStatus);
+    window.addEventListener('offline', updateOnlineStatus);
+    
+    return () => {
+      window.removeEventListener('online', updateOnlineStatus);
+      window.removeEventListener('offline', updateOnlineStatus);
+    };
+  }, [updateOnlineStatus]);
+
+  // Marquer le composant comme démonté lors du nettoyage
+  useEffect(() => {
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
+
+  // Fonction de chargement des données du dashboard
+  const loadDashboardData = useCallback(async () => {
+    Diagnostics.log('Dashboard', 'Chargement des données du dashboard...');
+    
+    if (!isMounted.current) {
+      Diagnostics.log('Dashboard', 'Tentative de charger des données avec composant démonté');
+      return;
+    }
+    
+    if (isOffline) {
+      Diagnostics.log('Dashboard', 'Mode hors ligne détecté - utilisation des données en cache si disponibles');
+      setLoading(false);
+      return;
+    }
+    
+    setLoading(true);
+    setLoadError(null);
+    
+    try {
+      // Chargement en parallèle pour optimiser les performances
+      const loadDevis = (user?.role === 'admin' ? devisApi.getAll() : devisApi.getByCompany(user?.companyId || '')).catch((err: unknown) => {
+        errorReporter.captureException(err, { 
+          component: 'Dashboard', 
+          action: 'loadDevis'
+        });
+        return [] as Devis[];
+      });
+      
+      const loadInvoices = (user?.role === 'admin' ? invoicesApi.getAll() : invoicesApi.getByCompany(user?.companyId || '')).catch((err: unknown) => {
+        errorReporter.captureException(err, { 
+          component: 'Dashboard', 
+          action: 'loadInvoices'
+        });
+        return [] as Invoice[];
+      });
+      
+      const loadTickets = (user?.role === 'admin' ? ticketsApi.getAll() : ticketsApi.getByCompany(user?.companyId || '')).catch((err: unknown) => {
+        errorReporter.captureException(err, { 
+          component: 'Dashboard', 
+          action: 'loadTickets'
+        });
+        return [] as Ticket[];
+      });
+      
+      // Essayer d'utiliser le cache d'abord pour les données statiques
+      let companies = getCompaniesCount();
+      if (companies === null && user?.role === 'admin') {
+        try {
+          const allCompanies = await companiesApi.getAll();
+          companies = allCompanies.length;
+          if (companies !== null) {
+            setCompaniesCount(companies);
+            setCachedCompaniesCount(companies);
+          }
+        } catch (err: unknown) {
+          errorReporter.captureException(err, {
+            component: 'Dashboard',
+            action: 'loadCompaniesCount'
+          });
+        }
+      }
+      
+      let users = getUsersCount();
+      if (users === null && user?.role === 'admin') {
+        try {
+          const allUsers = await usersApi.getAll();
+          users = allUsers.length;
+          if (users !== null) {
+            setUsersCount(users);
+            setCachedUsersCount(users);
+          }
+        } catch (err: unknown) {
+          errorReporter.captureException(err, {
+            component: 'Dashboard',
+            action: 'loadUsersCount'
+          });
+        }
+      }
+      
+      // Attendre tous les chargements critiques pour l'affichage
+      const [devis, invoicesData, ticketsData] = await Promise.all([
+        loadDevis,
+        loadInvoices,
+        loadTickets
+      ]);
+      
+      if (isMounted.current) {
+        setDevisList(devis);
+        setInvoices(invoicesData);
+        setTickets(ticketsData);
+        if (companies !== null) setCompaniesCount(companies);
+        if (users !== null) setUsersCount(users);
+        setLoading(false);
+      }
+      
+      Diagnostics.log('Dashboard', 'Données chargées avec succès');
+    } catch (error) {
+      if (isMounted.current) {
+        const errorMessage = error instanceof Error ? error.message : 'Une erreur s\'est produite';
+        setLoadError(errorMessage);
+        setLoading(false);
+        errorReporter.captureException(error, {
+          component: 'Dashboard',
+          action: 'loadDashboardData'
+        });
+        notificationManager.error('Erreur', { message: 'Impossible de charger les données du dashboard' });
+      }
+      Diagnostics.log('Dashboard', 'Erreur de chargement des données', error);
+    }
+  }, [isOffline, getCompaniesCount, getUsersCount, user]);
+
+  // Stats préparés avec useMemo pour éviter les recalculs inutiles
+  const stats = useMemo(() => {
+    const totalAmount = invoices.reduce((sum, invoice) => sum + parseFloat(invoice.amount.toString()), 0);
+    const overdueAmount = invoices
+      .filter(inv => inv.status === 'late' || inv.status === 'overdue')
+      .reduce((sum, invoice) => sum + parseFloat(invoice.amount.toString()), 0);
+    const pendingAmount = devisList
+      .filter(devis => devis.status === 'sent' || devis.status === 'pending')
+      .reduce((sum, devis) => sum + parseFloat(devis.amount.toString()), 0);
+    
+    // Récupérer les statistiques de tickets
+    const openTickets = tickets.filter(t => t.status === 'open' || t.status === 'pending_client_response' || t.status === 'pending_admin_response' || t.status === 'in_progress').length;
+    
+    return {
+      invoicesCount: invoices.length,
+      totalAmount,
+      pendingAmount,
+      overdueAmount,
+      devisCount: devisList.length,
+      openTickets,
+      companiesCount,
+      usersCount
+    };
+  }, [invoices, devisList, tickets, companiesCount, usersCount]);
+
+  // Activités récentes préparées avec useMemo
+  const recentActivities = useMemo(() => {
+    const activities: ActivityItem[] = [];
+    
+    // Ajouter les factures récentes
+    invoices
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, 5)
+      .forEach(invoice => {
+        activities.push({
+          id: `invoice-${invoice.id}`,
+          title: `Facture ${invoice.number}`,
+          description: `${invoice.status === 'paid' ? 'Payée' : 'Créée'} pour ${invoice.companyName || 'Client'}`,
+          date: invoice.createdAt,
+          type: 'invoice',
+          status: invoice.status === 'paid' ? 'completed' : (invoice.status === 'late' ? 'failed' : 'pending'),
+          link: {
+            url: user?.role === 'admin' ? `/admin/factures?id=${invoice.id}` : `/factures?id=${invoice.id}`,
+            label: 'Voir la facture'
+          }
+        });
+      });
+    
+    // Ajouter les devis récents
+    devisList
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, 3)
+      .forEach(devis => {
+        activities.push({
+          id: `devis-${devis.id}`,
+          title: `Devis ${devis.number}`,
+          description: `${devis.status === 'approved' ? 'Approuvé' : 'Créé'} pour ${devis.companyName || 'Client'}`,
+          date: devis.createdAt,
+          type: 'quote',
+          status: devis.status === 'approved' ? 'completed' : (devis.status === 'rejected' ? 'failed' : 'pending'),
+          link: {
+            url: user?.role === 'admin' ? `/admin/devis?id=${devis.id}` : `/devis?id=${devis.id}`,
+            label: 'Voir le devis'
+          }
+        });
+      });
+    
+    // Ajouter les tickets récents
+    tickets
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, 3)
+      .forEach(ticket => {
+        activities.push({
+          id: `ticket-${ticket.id}`,
+          title: ticket.subject || `Ticket #${ticket.number}`,
+          description: `Statut: ${ticket.status}`,
+          date: ticket.createdAt,
+          type: 'ticket',
+          status: ticket.status === 'closed' ? 'completed' : (ticket.status === 'open' ? 'pending' : 'pending'),
+          link: {
+            url: user?.role === 'admin' ? `/admin/support?id=${ticket.id}` : `/support?id=${ticket.id}`,
+            label: 'Voir le ticket'
+          }
+        });
+      });
+    
+    // Trier toutes les activités par date
+    return activities.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }, [invoices, devisList, tickets]);
+
+  // Grouper les items pour l'affichage en cartes
+  const dashboardItems = useMemo(() => {
+    const items = [
+      {
+        id: 'invoice-stats',
+        type: 'invoices',
+        title: 'Factures',
+        value: stats.invoicesCount.toString(),
+        icon: FileText,
+        color: 'blue',
+        details: (
+          <div className="space-y-2 text-sm">
+            <div className="flex justify-between">
+              <span>Chiffre d'affaires total:</span>
+              <span className="font-semibold">{formatCurrencyLocal(stats.totalAmount)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Montant en retard:</span>
+              <span className="font-semibold text-red-600">{formatCurrencyLocal(stats.overdueAmount)}</span>
+            </div>
+            <div className="mt-3">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="w-full"
+                onClick={() => navigate(user?.role === 'admin' ? '/admin/factures' : '/factures')}
+              >
+                Gérer les factures
+              </Button>
+            </div>
+          </div>
+        ),
+        onClick: () => navigate(user?.role === 'admin' ? '/admin/factures' : '/factures')
+      },
+      {
+        id: 'quote-stats',
+        type: 'quotes',
+        title: 'Devis',
+        value: stats.devisCount.toString(),
+        icon: ClipboardList,
+        color: 'yellow',
+        details: (
+          <div className="space-y-2 text-sm">
+            <div className="flex justify-between">
+              <span>Montant total en attente:</span>
+              <span className="font-semibold">{formatCurrencyLocal(stats.pendingAmount)}</span>
+            </div>
+            <div className="mt-3">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="w-full"
+                onClick={() => navigate(user?.role === 'admin' ? '/admin/devis' : '/devis')}
+              >
+                Gérer les devis
+              </Button>
+            </div>
+          </div>
+        ),
+        onClick: () => navigate(user?.role === 'admin' ? '/admin/devis' : '/devis')
+      },
+      {
+        id: 'tickets-stats',
+        type: 'tickets',
+        title: 'Tickets de support',
+        value: stats.openTickets.toString(),
+        description: 'Tickets ouverts',
+        icon: MessageSquare,
+        color: 'green',
+        details: (
+          <div className="space-y-2 text-sm">
+            <div className="flex justify-between">
+              <span>Total des tickets:</span>
+              <span className="font-semibold">{tickets.length}</span>
+            </div>
+            <div className="mt-3">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="w-full"
+                onClick={() => navigate(user?.role === 'admin' ? '/admin/support' : '/support')}
+              >
+                Gérer les tickets
+              </Button>
+            </div>
+          </div>
+        ),
+        onClick: () => navigate(user?.role === 'admin' ? '/admin/support' : '/support')
+      }
+    ];
+    
+    // Ajouter les stats admin si l'utilisateur est admin
+    if (user?.role === 'admin') {
+      items.push({
+        id: 'companies-stats',
+        type: 'companies',
+        title: 'Entreprises',
+        value: stats.companiesCount.toString(),
+        icon: Building,
+        color: 'purple',
+        details: (
+          <div className="space-y-2 text-sm">
+            <div className="flex justify-between">
+              <span>Entreprises clientes:</span>
+              <span className="font-semibold">{stats.companiesCount}</span>
+            </div>
+            <div className="mt-3">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="w-full"
+                onClick={() => navigate('/admin/companies')}
+              >
+                Gérer les entreprises
+              </Button>
+            </div>
+          </div>
+        ),
+        onClick: () => navigate('/admin/companies')
+      });
+      
+      items.push({
+        id: 'users-stats',
+        type: 'users',
+        title: 'Utilisateurs',
+        value: stats.usersCount.toString(),
+        icon: Users,
+        color: 'red',
+        details: (
+          <div className="space-y-2 text-sm">
+            <div className="flex justify-between">
+              <span>Total des utilisateurs:</span>
+              <span className="font-semibold">{stats.usersCount}</span>
+            </div>
+            <div className="mt-3">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="w-full"
+                onClick={() => navigate('/admin/users')}
+              >
+                Gérer les utilisateurs
+              </Button>
+            </div>
+          </div>
+        ),
+        onClick: () => navigate('/admin/users')
+      });
+      
+      items.push({
+        id: 'revenue-stats',
+        type: 'revenue',
+        title: 'Chiffre d\'affaires',
+        value: formatCurrencyLocal(stats.totalAmount),
+        icon: TrendingUp,
+        color: 'default',
+        details: (
+          <div className="space-y-2 text-sm">
+            <div className="flex justify-between">
+              <span>Facturé:</span>
+              <span className="font-semibold">{formatCurrencyLocal(stats.totalAmount)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>En attente:</span>
+              <span className="font-semibold">{formatCurrencyLocal(stats.pendingAmount)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>En retard:</span>
+              <span className="font-semibold text-red-600">{formatCurrencyLocal(stats.overdueAmount)}</span>
+            </div>
+          </div>
+        ),
+        onClick: () => navigate('/admin/rapports')
+      });
+    }
+    
+    return items;
+  }, [stats, user, navigate, formatCurrencyLocal, tickets.length]);
+
+  // Charger les données au montage du composant
+  useEffect(() => {
+    if (user) {
+      loadDashboardData();
+    }
+  }, [user, loadDashboardData]);
+  
+  // Déclencher l'animation après le chargement initial
+  useEffect(() => {
+    if (!loading && (devisList.length > 0 || invoices.length > 0 || tickets.length > 0)) {
+      // Délai pour s'assurer que le DOM est complètement prêt
+      const timer = setTimeout(() => {
+        setAnimationReady(true);
+      }, 300);
+      return () => clearTimeout(timer);
+    } else {
+      setAnimationReady(false);
+    }
+  }, [loading, devisList, invoices, tickets]);
+
+  // Fonction pour le rendu d'un item de statistiques
+  const renderStatsItem = React.useCallback((item: any) => {
+    return (
+      <InteractiveStatsCard
+        key={item.id}
+        title={item.title}
+        value={item.value}
+        description={item.description}
+        icon={item.icon}
+        color={item.color}
+        onClick={item.onClick}
+        details={item.details}
+      />
+    );
+  }, []);
+
+  if (isOffline) {
+    return (
+      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6 flex flex-col items-center justify-center mb-6">
+        <WifiOff className="h-10 w-10 text-yellow-500 mb-4" />
+        <h2 className="text-xl font-bold text-yellow-700 mb-2">Mode Hors-ligne</h2>
+        <p className="text-yellow-600 text-center mb-4">
+          Vous n'êtes pas connecté à Internet. Certaines fonctionnalités et données peuvent ne pas être disponibles.
+        </p>
+        <Button
+          variant="outline"
+          onClick={loadDashboardData}
+          className="bg-white hover:bg-slate-50"
+        >
+          <RefreshCw className="h-4 w-4 mr-2" /> Réessayer
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold text-slate-900">Tableau de bord</h1>
+          <p className="text-slate-600 mt-1">Bienvenue, {user ? `${user.firstName || ''} ${user.lastName || ''}` : 'Utilisateur'}</p>
+        </div>
+        
+        <TooltipProvider>
+          <div className="flex items-center bg-muted/40 rounded-lg p-1 border shadow-sm">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button 
+                  variant={viewMode === 'cards' ? "secondary" : "ghost"} 
+                  size="sm" 
+                  onClick={() => setViewMode('cards')} 
+                  className="px-3"
+                >
+                  <LayoutGrid className="h-4 w-4 mr-1" />
+                  <span className="sr-only sm:not-sr-only sm:inline-block">Cartes</span>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Vue en cartes</p>
+              </TooltipContent>
+            </Tooltip>
+            
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button 
+                  variant={viewMode === 'list' ? "secondary" : "ghost"} 
+                  size="sm" 
+                  onClick={() => setViewMode('list')} 
+                  className="px-3"
+                >
+                  <List className="h-4 w-4 mr-1" />
+                  <span className="sr-only sm:not-sr-only sm:inline-block">Liste</span>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Vue en liste</p>
+              </TooltipContent>
+            </Tooltip>
+            
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button 
+                  variant="ghost"
+                  size="sm"
+                  onClick={loadDashboardData}
+                  className="px-2 ml-1"
+                  disabled={loading}
+                >
+                  <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Rafraîchir les données</p>
+              </TooltipContent>
+            </Tooltip>
+          </div>
+        </TooltipProvider>
+      </div>
+      
+      <AnimatePresence mode="wait" initial={false}>
+        <motion.div
+          key={viewMode}
+          initial={{ opacity: 0, y: 20 }}
+          animate={animationReady ? { opacity: 1, y: 0 } : { opacity: 0, y: 20 }}
+          exit={{ opacity: 0, y: -20 }}
+          transition={{ 
+            duration: 0.5, 
+            ease: [0.22, 1, 0.36, 1],
+            opacity: { duration: 0.4 },
+            y: { type: "spring", stiffness: 100, damping: 15 }
+          }}
+        >
+          {viewMode === 'cards' && (
+            <div className="space-y-6">
+              {/* Vue en cartes interactives - 100% SHOWCASE */}
+              <InteractiveDashboardGrid
+                items={dashboardItems}
+                loading={loading}
+                renderItem={renderStatsItem}
+                keyExtractor={(item) => item.id}
+                isReady={animationReady}
+                columnLayouts={{
+                  mobile: 1,
+                  tablet: 2,
+                  desktop: 3
+                }}
+              />
+              
+              <div className="mt-8">
+                <InteractiveActivityCard
+                  title="Activités récentes"
+                  activities={recentActivities}
+                  maxItems={5}
+                  emptyMessage="Aucune activité récente à afficher"
+                />
+              </div>
+            </div>
+          )}
+
+          {viewMode === 'list' && (
+            <div className="space-y-6">
+              {/* Vue en liste alternative */}
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                {dashboardItems.map((item) => (
+                  <motion.div
+                    key={item.id}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.3 }}
+                    onClick={item.onClick}
+                    className={cn(
+                      "flex items-center gap-4 p-4 rounded-lg border hover:shadow-sm transition-all", 
+                      item.onClick && "cursor-pointer"
+                    )}
+                  >
+                    <div className={cn(
+                      "p-2 rounded-full",
+                      item.color === 'blue' && "bg-blue-100",
+                      item.color === 'green' && "bg-green-100",
+                      item.color === 'yellow' && "bg-yellow-100",
+                      item.color === 'red' && "bg-red-100",
+                      item.color === 'purple' && "bg-purple-100",
+                      item.color === 'default' && "bg-slate-100",
+                    )}>
+                      <item.icon className={cn(
+                        "h-5 w-5",
+                        item.color === 'blue' && "text-blue-600",
+                        item.color === 'green' && "text-green-600",
+                        item.color === 'yellow' && "text-yellow-600",
+                        item.color === 'red' && "text-red-600",
+                        item.color === 'purple' && "text-purple-600",
+                        item.color === 'default' && "text-slate-600",
+                      )} />
+                    </div>
+                    <div>
+                      <h3 className="font-medium text-sm text-muted-foreground">{item.title}</h3>
+                      <p className="text-xl font-bold">{item.value}</p>
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+              
+              <div className="mt-6">
+                <h2 className="text-xl font-semibold mb-4">Activités récentes</h2>
+                <div className="divide-y rounded-lg border">
+                  {recentActivities.length === 0 ? (
+                    <div className="p-6 text-center text-muted-foreground">
+                      Aucune activité récente à afficher
+                    </div>
+                  ) : (
+                    recentActivities.map((activity) => (
+                      <div key={activity.id} className="flex items-start justify-between p-4 hover:bg-slate-50">
+                        <div className="flex items-start gap-3">
+                          <div className="mt-1">
+                            {activity.type === 'invoice' && <FileText className="h-5 w-5 text-blue-500" />}
+                            {activity.type === 'quote' && <ClipboardList className="h-5 w-5 text-yellow-500" />}
+                            {activity.type === 'ticket' && <MessageSquare className="h-5 w-5 text-green-500" />}
+                          </div>
+                          <div>
+                            <h4 className="font-medium">{activity.title}</h4>
+                            <p className="text-sm text-muted-foreground">{activity.description}</p>
+                            <p className="text-xs mt-1">{formatDate(new Date(activity.date))}</p>
+                          </div>
+                        </div>
+                        {activity.status && (
+                          <Badge 
+                            className={cn(
+                              "text-xs",
+                              activity.status === 'completed' && "bg-green-100 text-green-800",
+                              activity.status === 'pending' && "bg-yellow-100 text-yellow-800",
+                              activity.status === 'failed' && "bg-red-100 text-red-800"
+                            )}
+                          >
+                            {activity.status}
+                          </Badge>
+                        )}
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+        </motion.div>
+      </AnimatePresence>
+    </div>
+  );
+};
+
+export default Dashboard;

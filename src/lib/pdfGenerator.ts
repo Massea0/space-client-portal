@@ -170,7 +170,7 @@ const formatCurrencyForPdf = (amount: number, includeCurrencySymbol: boolean = t
     });
 
     // Remplace l'espace (séparateur de milliers) par un point
-    let result = formatted.replace(/\s/g, '.'); // Ex: "800 000,00" -> "800.000,00"
+    const result = formatted.replace(/\s/g, '.'); // Ex: "800 000,00" -> "800.000,00"
 
     // Ajoute le symbole monétaire 'F' si demandé
     if (includeCurrencySymbol) {

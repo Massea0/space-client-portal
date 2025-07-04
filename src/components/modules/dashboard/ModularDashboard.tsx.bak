@@ -1,0 +1,437 @@
+// src/components/modules/dashboard/ModularDashboard.tsx
+import React, { useState, useRef, useCallback, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { 
+  Plus, 
+  Layout, 
+  Grid3X3, 
+  Palette,
+  Settings,
+  Save,
+  RotateCcw,
+  Eye,
+  Maximize,
+  Zap
+} from 'lucide-react';
+import { DashboardWidgetContainer, DashboardWidget, WidgetSize } from './DashboardWidgetContainer';
+import { AIInsightsWidget } from './AIInsightsWidget';
+import InteractiveStatsCard from './InteractiveStatsCard';
+import InteractiveActivityCard from './InteractiveActivityCard';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Badge } from '@/components/ui/badge';
+import { cn } from '@/lib/utils';
+
+interface ModularDashboardProps {
+  initialWidgets?: DashboardWidget[];
+  onSaveLayout?: (widgets: DashboardWidget[]) => void;
+  onLoadLayout?: () => DashboardWidget[] | null;
+  className?: string;
+}
+
+const GRID_SIZE = 20;
+const SNAP_THRESHOLD = 10;
+
+// Widgets par défaut disponibles
+const AVAILABLE_WIDGETS = [
+  {
+    id: 'ai-insights',
+    title: 'Insights IA',
+    type: 'ai-insights' as const,
+    description: 'Analyses intelligentes et recommandations IA',
+    icon: Zap,
+    component: AIInsightsWidget,
+    defaultSize: { width: 350, height: 300, minWidth: 300, minHeight: 250, maxWidth: 500, maxHeight: 400 },
+    refreshable: true,
+    configurable: true
+  },
+  {
+    id: 'stats-card',
+    title: 'Statistiques',
+    type: 'stats' as const,
+    description: 'Métriques et KPIs en temps réel',
+    icon: Grid3X3,
+    component: InteractiveStatsCard,
+    defaultSize: { width: 280, height: 200, minWidth: 250, minHeight: 180, maxWidth: 350, maxHeight: 250 },
+    refreshable: true,
+    configurable: false
+  },
+  {
+    id: 'activity-feed',
+    title: 'Activités récentes',
+    type: 'activity' as const,
+    description: 'Flux des dernières activités',
+    icon: Layout,
+    component: InteractiveActivityCard,
+    defaultSize: { width: 400, height: 350, minWidth: 350, minHeight: 300, maxWidth: 600, maxHeight: 500 },
+    refreshable: true,
+    configurable: true
+  }
+];
+
+export const ModularDashboard: React.FC<ModularDashboardProps> = ({
+  initialWidgets = [],
+  onSaveLayout,
+  onLoadLayout,
+  className
+}) => {
+  const [widgets, setWidgets] = useState<DashboardWidget[]>(initialWidgets);
+  const [draggedWidget, setDraggedWidget] = useState<string | null>(null);
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  const [isAddWidgetOpen, setIsAddWidgetOpen] = useState(false);
+  const [isDarkMode, setIsDarkMode] = useState(true);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const dragStartPos = useRef({ x: 0, y: 0 });
+
+  // Snap to grid helper
+  const snapToGrid = useCallback((value: number): number => {
+    return Math.round(value / GRID_SIZE) * GRID_SIZE;
+  }, []);
+
+  // Handle drag start
+  const handleDragStart = useCallback((widgetId: string, e: React.MouseEvent) => {
+    const widget = widgets.find(w => w.id === widgetId);
+    if (!widget) return;
+
+    setDraggedWidget(widgetId);
+    const rect = e.currentTarget.getBoundingClientRect();
+    const containerRect = containerRef.current?.getBoundingClientRect();
+    
+    if (containerRect) {
+      setDragOffset({
+        x: e.clientX - rect.left,
+        y: e.clientY - rect.top
+      });
+      dragStartPos.current = {
+        x: e.clientX - containerRect.left,
+        y: e.clientY - containerRect.top
+      };
+    }
+  }, [widgets]);
+
+  // Handle drag move
+  useEffect(() => {
+    if (!draggedWidget) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const containerRect = containerRef.current?.getBoundingClientRect();
+      if (!containerRect) return;
+
+      const x = snapToGrid(e.clientX - containerRect.left - dragOffset.x);
+      const y = snapToGrid(e.clientY - containerRect.top - dragOffset.y);
+
+      setWidgets(prev => prev.map(widget => 
+        widget.id === draggedWidget 
+          ? { ...widget, position: { x: Math.max(0, x), y: Math.max(0, y) } }
+          : widget
+      ));
+    };
+
+    const handleMouseUp = () => {
+      setDraggedWidget(null);
+      setDragOffset({ x: 0, y: 0 });
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [draggedWidget, dragOffset, snapToGrid]);
+
+  // Add new widget
+  const addWidget = useCallback((widgetTemplate: typeof AVAILABLE_WIDGETS[0]) => {
+    const newWidget: DashboardWidget = {
+      id: `${widgetTemplate.id}-${Date.now()}`,
+      title: widgetTemplate.title,
+      type: widgetTemplate.type,
+      size: widgetTemplate.defaultSize,
+      position: { x: 50, y: 50 },
+      component: widgetTemplate.component,
+      refreshable: widgetTemplate.refreshable,
+      configurable: widgetTemplate.configurable,
+      props: {}
+    };
+
+    setWidgets(prev => [...prev, newWidget]);
+    setIsAddWidgetOpen(false);
+  }, []);
+
+  // Update widget
+  const updateWidget = useCallback((updatedWidget: DashboardWidget) => {
+    setWidgets(prev => prev.map(widget => 
+      widget.id === updatedWidget.id ? updatedWidget : widget
+    ));
+  }, []);
+
+  // Remove widget
+  const removeWidget = useCallback((widgetId: string) => {
+    setWidgets(prev => prev.filter(widget => widget.id !== widgetId));
+  }, []);
+
+  // Handle widget resize
+  const handleWidgetResize = useCallback((widget: DashboardWidget, newSize: WidgetSize) => {
+    updateWidget({ ...widget, size: newSize });
+  }, [updateWidget]);
+
+  // Handle widget refresh
+  const handleWidgetRefresh = useCallback((widgetId: string) => {
+    // Trigger refresh logic here
+    console.log('Refreshing widget:', widgetId);
+  }, []);
+
+  // Save layout
+  const saveLayout = useCallback(() => {
+    if (onSaveLayout) {
+      onSaveLayout(widgets);
+    }
+    // Also save to localStorage as backup
+    localStorage.setItem('dashboard-layout', JSON.stringify(widgets));
+  }, [widgets, onSaveLayout]);
+
+  // Load layout
+  const loadLayout = useCallback(() => {
+    let loadedWidgets: DashboardWidget[] | null = null;
+    
+    if (onLoadLayout) {
+      loadedWidgets = onLoadLayout();
+    } else {
+      // Try loading from localStorage
+      const saved = localStorage.getItem('dashboard-layout');
+      if (saved) {
+        try {
+          loadedWidgets = JSON.parse(saved);
+        } catch (e) {
+          console.error('Failed to parse saved layout:', e);
+        }
+      }
+    }
+    
+    if (loadedWidgets) {
+      setWidgets(loadedWidgets);
+    }
+  }, [onLoadLayout]);
+
+  // Reset to default layout
+  const resetLayout = useCallback(() => {
+    setWidgets([]);
+    localStorage.removeItem('dashboard-layout');
+  }, []);
+
+  return (
+    <div className={cn(
+      "relative w-full h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950",
+      "overflow-auto",
+      className
+    )}>
+      {/* Toolbar */}
+      <div className="sticky top-0 z-50 bg-gray-900/95 backdrop-blur-sm border-b border-gray-800/50 p-4">
+        <div className="flex items-center justify-between max-w-7xl mx-auto">
+          <div className="flex items-center gap-4">
+            <h1 className="text-xl font-semibold text-gray-100">
+              Dashboard Modulaire
+            </h1>
+            <Badge variant="secondary" className="bg-blue-500/20 text-blue-300 border-blue-500/30">
+              {widgets.length} widgets
+            </Badge>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsAddWidgetOpen(true)}
+              className="bg-gray-800/50 border-gray-700 text-gray-200 hover:bg-gray-700/50"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Ajouter Widget
+            </Button>
+
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  className="bg-gray-800/50 border-gray-700 text-gray-200 hover:bg-gray-700/50"
+                >
+                  <Settings className="h-4 w-4 mr-2" />
+                  Options
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48 bg-gray-900 border-gray-800">
+                <DropdownMenuItem 
+                  className="text-gray-200 focus:bg-gray-800"
+                  onClick={saveLayout}
+                >
+                  <Save className="h-4 w-4 mr-2" />
+                  Sauvegarder
+                </DropdownMenuItem>
+                <DropdownMenuItem 
+                  className="text-gray-200 focus:bg-gray-800"
+                  onClick={loadLayout}
+                >
+                  <Eye className="h-4 w-4 mr-2" />
+                  Charger
+                </DropdownMenuItem>
+                <DropdownMenuSeparator className="bg-gray-800" />
+                <DropdownMenuItem 
+                  className="text-gray-200 focus:bg-gray-800"
+                  onClick={() => setIsDarkMode(!isDarkMode)}
+                >
+                  <Palette className="h-4 w-4 mr-2" />
+                  {isDarkMode ? 'Mode clair' : 'Mode sombre'}
+                </DropdownMenuItem>
+                <DropdownMenuSeparator className="bg-gray-800" />
+                <DropdownMenuItem 
+                  className="text-red-400 focus:bg-red-900/20"
+                  onClick={resetLayout}
+                >
+                  <RotateCcw className="h-4 w-4 mr-2" />
+                  Réinitialiser
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </div>
+      </div>
+
+      {/* Dashboard Container */}
+      <div 
+        ref={containerRef}
+        className="relative w-full min-h-screen p-6"
+        style={{
+          backgroundImage: `
+            radial-gradient(circle at 1px 1px, rgba(255,255,255,0.02) 1px, transparent 0),
+            linear-gradient(rgba(255,255,255,0.01) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(255,255,255,0.01) 1px, transparent 1px)
+          `,
+          backgroundSize: `${GRID_SIZE}px ${GRID_SIZE}px, ${GRID_SIZE}px ${GRID_SIZE}px, ${GRID_SIZE}px ${GRID_SIZE}px`
+        }}
+      >
+        <AnimatePresence>
+          {widgets.length === 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="absolute inset-0 flex items-center justify-center"
+            >
+              <Card className="bg-gray-900/50 border-gray-800/50 p-8 text-center max-w-md">
+                <CardHeader>
+                  <CardTitle className="text-gray-200">Dashboard vide</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-gray-400 mb-6">
+                    Commencez par ajouter des widgets pour personnaliser votre dashboard.
+                  </p>
+                  <Button 
+                    onClick={() => setIsAddWidgetOpen(true)}
+                    className="bg-blue-600 hover:bg-blue-700"
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Ajouter votre premier widget
+                  </Button>
+                </CardContent>
+              </Card>
+            </motion.div>
+          )}
+
+          {widgets.map(widget => (
+            <DashboardWidgetContainer
+              key={widget.id}
+              widget={widget}
+              onUpdateWidget={updateWidget}
+              onRemoveWidget={removeWidget}
+              onResize={handleWidgetResize}
+              onRefresh={handleWidgetRefresh}
+              isDragging={draggedWidget === widget.id}
+              onDragStart={() => handleDragStart(widget.id, {} as React.MouseEvent)}
+            />
+          ))}
+        </AnimatePresence>
+      </div>
+
+      {/* Add Widget Dialog */}
+      <Dialog open={isAddWidgetOpen} onOpenChange={setIsAddWidgetOpen}>
+        <DialogContent className="bg-gray-900 border-gray-800 max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-gray-100">Ajouter un Widget</DialogTitle>
+            <DialogDescription className="text-gray-400">
+              Choisissez un widget à ajouter à votre dashboard personnalisé.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 py-4">
+            {AVAILABLE_WIDGETS.map((widgetTemplate) => {
+              const IconComponent = widgetTemplate.icon;
+              return (
+                <Card 
+                  key={widgetTemplate.id}
+                  className="bg-gray-800/50 border-gray-700 hover:bg-gray-800/70 cursor-pointer transition-colors"
+                  onClick={() => addWidget(widgetTemplate)}
+                >
+                  <CardContent className="p-4">
+                    <div className="flex items-start gap-3">
+                      <div className="p-2 bg-blue-500/20 rounded-lg">
+                        <IconComponent className="h-5 w-5 text-blue-400" />
+                      </div>
+                      <div className="flex-1">
+                        <h3 className="font-medium text-gray-200 mb-1">
+                          {widgetTemplate.title}
+                        </h3>
+                        <p className="text-sm text-gray-400">
+                          {widgetTemplate.description}
+                        </p>
+                        <div className="flex gap-2 mt-2">
+                          {widgetTemplate.refreshable && (
+                            <Badge variant="outline" className="text-xs border-green-500/30 text-green-400">
+                              Rafraîchissable
+                            </Badge>
+                          )}
+                          {widgetTemplate.configurable && (
+                            <Badge variant="outline" className="text-xs border-purple-500/30 text-purple-400">
+                              Configurable
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+
+          <DialogFooter>
+            <Button 
+              variant="outline" 
+              onClick={() => setIsAddWidgetOpen(false)}
+              className="bg-gray-800/50 border-gray-700 text-gray-200"
+            >
+              Annuler
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+};
+
+export default ModularDashboard;

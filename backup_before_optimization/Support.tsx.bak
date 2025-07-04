@@ -1,0 +1,329 @@
+// src/pages/Support.tsx (version mise à jour)
+import React, { useState, useEffect, useCallback } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { 
+  Select, 
+  SelectContent, 
+  SelectItem, 
+  SelectTrigger, 
+  SelectValue 
+} from '@/components/ui/select';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter
+} from '@/components/ui/dialog';
+import { useAuth } from '@/context/AuthContext';
+import { ticketsApi, ticketCategoriesApi } from '@/services/api';
+import { Ticket, TicketCategory } from '@/types';
+import { Plus, Search, Filter } from 'lucide-react';
+import { notificationManager } from '@/components/ui/notification-provider';
+import { SafeDialogTrigger } from "@/components/ui/safe-dialog-trigger";
+import { SafeSelectTrigger } from '@/components/ui/safe-triggers';
+
+// Importer les composants partagés
+import {
+  TicketCard,
+  TicketDetailView,
+  TicketCategoryDropdown,
+  TicketPriorityDropdown
+} from '@/components/support';
+
+const Support = () => {
+  const { user } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [priorityFilter, setPriorityFilter] = useState<string>('all');
+  const [categoryFilter, setCategoryFilter] = useState<string>('all');
+  const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
+  
+  // Pour la création d'un nouveau ticket
+  const [showNewTicketDialog, setShowNewTicketDialog] = useState(false);
+  const [newTicketSubject, setNewTicketSubject] = useState('');
+  const [newTicketDescription, setNewTicketDescription] = useState('');
+  const [newTicketCategoryId, setNewTicketCategoryId] = useState<string>('');
+  const [newTicketPriority, setNewTicketPriority] = useState<Ticket['priority']>('medium');
+
+  const [tickets, setTickets] = useState<Ticket[]>([]);
+  const [categories, setCategories] = useState<TicketCategory[]>([]);
+
+  const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (location.state?.openCreateTicketDialog) {
+      setShowNewTicketDialog(true);
+      navigate(location.pathname, { replace: true, state: {} });
+    }
+  }, [location.state, navigate, location.pathname]);
+
+  const loadTicketsAndCategories = useCallback(async () => {
+    if (!user) return;
+    try {
+      setLoading(true);
+      const companyIdForRequests = user.companyId ?? '';
+      const [ticketsData, categoriesData] = await Promise.all([
+        ticketsApi.getByCompany(companyIdForRequests),
+        ticketCategoriesApi.getAll()
+      ]);
+      setTickets(ticketsData);
+      setCategories(categoriesData);
+    } catch (error) {
+      notificationManager.error('Erreur', { message: 'Impossible de charger les données de support' });
+    } finally {
+      setLoading(false);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    loadTicketsAndCategories();
+  }, [loadTicketsAndCategories]);
+
+  const filteredTickets = React.useMemo(() => {
+    return tickets.filter(ticket => {
+      const matchesSearch = (
+        ticket.subject?.toLowerCase().includes(searchTerm.toLowerCase()) || 
+        ticket.number?.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+      const matchesStatus = statusFilter === 'all' || ticket.status === statusFilter;
+      const matchesPriority = priorityFilter === 'all' || ticket.priority === priorityFilter;
+      const matchesCategory = categoryFilter === 'all' || ticket.categoryId === categoryFilter;
+      return matchesSearch && matchesStatus && matchesPriority && matchesCategory;
+    });
+  }, [tickets, searchTerm, statusFilter, priorityFilter, categoryFilter]);
+
+  const handleCreateNewTicket = async () => {
+    if (!user || !user.companyId) return;
+
+    if (!newTicketSubject.trim() || !newTicketDescription.trim()) {
+      notificationManager.error('Formulaire incomplet', { message: 'Merci de remplir tous les champs obligatoires.' });
+      return;
+    }
+
+    try {
+      setActionLoading('create-ticket');
+      const newTicket = await ticketsApi.create({
+        subject: newTicketSubject,
+        description: newTicketDescription,
+        companyId: user.companyId,
+        priority: newTicketPriority,
+        categoryId: newTicketCategoryId || undefined,
+        status: 'open',
+      });
+
+      setTickets(prev => [newTicket, ...prev]);
+      setShowNewTicketDialog(false);
+      setNewTicketSubject('');
+      setNewTicketDescription('');
+      setNewTicketCategoryId('');
+      setNewTicketPriority('medium');
+      notificationManager.success('Ticket créé', { message: 'Votre ticket a été créé avec succès.' });
+    } catch (error) {
+      notificationManager.error('Erreur', { message: 'Erreur lors de la création du ticket.' });
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleSendMessage = async (ticketId: string, content: string) => {
+    if (!user) return;
+    try {
+      setActionLoading(`message-${ticketId}`);
+      const updatedTicket = await ticketsApi.addMessage(ticketId, {
+        content,
+        authorId: user.id,
+        authorName: `${user.firstName} ${user.lastName}`,
+        authorRole: 'client'
+      });
+      setTickets(prevTickets => 
+        prevTickets.map(t => t.id === ticketId ? updatedTicket : t)
+      );
+      setSelectedTicket(updatedTicket);
+      notificationManager.success('Message envoyé', { message: 'Votre message a été envoyé avec succès.' });
+    } catch (error) {
+      notificationManager.error('Erreur', { message: 'Erreur lors de l\'envoi du message.' });
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const openTicketDetailsDialog = (ticketId: string) => {
+    const ticket = tickets.find(t => t.id === ticketId);
+    if (ticket) {
+      setSelectedTicket(ticket);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto" />
+          <p className="mt-4 text-muted-foreground">Chargement des tickets...</p>
+        </div>
+      </div>
+    );
+  }
+
+  const availableStatuses: Ticket['status'][] = ['open', 'in_progress', 'resolved', 'closed', 'pending_admin_response', 'pending_client_response'];
+  const availablePriorities: Ticket['priority'][] = ['low', 'medium', 'high', 'urgent'];
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-foreground">Support</h1>
+          <p className="text-muted-foreground mt-1">Besoin d'aide ? Contactez notre équipe</p>
+        </div>
+        <Button
+          onClick={() => setShowNewTicketDialog(true)}
+          className="flex items-center"
+        >
+          <Plus className="mr-2 h-4 w-4" />
+          Nouveau ticket
+        </Button>
+      </div>
+
+      {/* Filtres et recherche */}
+      <div className="flex flex-col md:flex-row gap-4 p-2">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+          <Input placeholder="Rechercher par sujet ou numéro..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10" />
+        </div>
+        <div className="flex gap-2 flex-wrap md:flex-nowrap">
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SafeSelectTrigger className="w-full md:w-48">
+              <Filter className="h-4 w-4 mr-2" />
+              <SelectValue placeholder="Statut" />
+            </SafeSelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Tous les statuts</SelectItem>
+              {availableStatuses.map(status => (
+                <SelectItem key={status} value={status} className="capitalize">
+                  {status.replace(/_/g, ' ')}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={priorityFilter} onValueChange={setPriorityFilter}>
+            <SafeSelectTrigger className="w-full md:w-48">
+              <SelectValue placeholder="Priorité" />
+            </SafeSelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Toutes priorités</SelectItem>
+              {availablePriorities.map(priority => (
+                <SelectItem key={priority} value={priority} className="capitalize">
+                  {priority}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      {/* Liste des tickets en cartes avec boutons "Voir" */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {filteredTickets.length === 0 && (
+          <div className="col-span-full text-center py-8 text-muted-foreground">
+            Aucun ticket trouvé. Créez-en un nouveau pour contacter notre équipe.
+          </div>
+        )}
+        {filteredTickets.map(ticket => (
+          <TicketCard 
+            key={ticket.id} 
+            ticket={ticket} 
+            onTicketClick={openTicketDetailsDialog} 
+          />
+        ))}
+      </div>
+
+      {/* Modal pour la création d'un ticket */}
+      <Dialog open={showNewTicketDialog} onOpenChange={setShowNewTicketDialog}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Créer un nouveau ticket de support</DialogTitle>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <label htmlFor="subject" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">Sujet</label>
+              <Input 
+                id="subject" 
+                value={newTicketSubject} 
+                onChange={(e) => setNewTicketSubject(e.target.value)} 
+                placeholder="Décrivez brièvement votre problème"
+                className="col-span-3" 
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <label htmlFor="description" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">Description détaillée</label>
+              <Textarea 
+                id="description" 
+                value={newTicketDescription} 
+                onChange={(e) => setNewTicketDescription(e.target.value)} 
+                placeholder="Donnez-nous tous les détails nécessaires pour traiter votre demande"
+                className="min-h-[100px]" 
+              />
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label htmlFor="category" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">Catégorie</label>
+                <TicketCategoryDropdown
+                  currentCategory={newTicketCategoryId}
+                  onChange={setNewTicketCategoryId}
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <label htmlFor="priority" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">Priorité</label>
+                <TicketPriorityDropdown
+                  currentPriority={newTicketPriority}
+                  onChange={setNewTicketPriority}
+                />
+              </div>
+            </div>
+          </div>
+          
+          <DialogFooter>
+            <Button 
+              variant="outline" 
+              onClick={() => setShowNewTicketDialog(false)}
+            >
+              Annuler
+            </Button>
+            <Button 
+              onClick={handleCreateNewTicket}
+              disabled={!newTicketSubject.trim() || !newTicketDescription.trim() || actionLoading === 'create-ticket'}
+            >
+              {actionLoading === 'create-ticket' ? 'Création...' : 'Créer le ticket'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Vue détaillée du ticket */}
+      <TicketDetailView
+        ticket={selectedTicket}
+        isAdmin={false}
+        isOpen={!!selectedTicket}
+        onOpenChange={(open) => {
+          if (!open) setSelectedTicket(null);
+        }}
+        onSendMessage={handleSendMessage}
+        isSending={!!actionLoading && actionLoading.startsWith('message-')}
+      />
+    </div>
+  );
+};
+
+export default Support;

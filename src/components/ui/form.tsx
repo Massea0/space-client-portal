@@ -12,6 +12,7 @@ import {
 
 import { cn } from "@/lib/utils"
 import { Label } from "@/components/ui/label"
+import { ensureSingleElement } from "@/lib/react-children-utils.tsx"
 
 const Form = FormProvider
 
@@ -164,6 +165,20 @@ const FormMessage = React.forwardRef<
 })
 FormMessage.displayName = "FormMessage"
 
+// Exemple pour un champ de formulaire utilisant Slot :
+const FormFieldSlot = React.forwardRef<
+  HTMLDivElement,
+  { asChild?: boolean; children: React.ReactNode }
+>(({ asChild = false, children, ...props }, ref) => {
+  const Comp = asChild ? Slot : "div"
+  const safeChildren = asChild ? ensureSingleElement(children) : children
+  return (
+    <Comp ref={ref} {...props}>
+      {safeChildren}
+    </Comp>
+  )
+})
+
 export {
   useFormField,
   Form,
@@ -173,4 +188,5 @@ export {
   FormDescription,
   FormMessage,
   FormField,
+  FormFieldSlot,
 }

@@ -1,0 +1,513 @@
+// src/pages/admin/AdminDevis.tsx
+import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { devisApi, invoicesApi } from '@/services/api'; // Ajout de invoicesApi
+import { Devis as DevisType } from '@/types';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+  DialogTrigger
+} from "@/components/ui/dialog";
+import { SafeDialogTrigger } from "@/components/ui/safe-dialog-trigger";
+import { formatDate, formatCurrency, cn } from '@/lib/utils';
+import { toast } from 'sonner'; 
+import { downloadDevisPdf } from '@/lib/pdfGenerator';
+import {
+  Download, CheckCircle, XCircle, Search as SearchIcon, Plus, Filter,
+  FileText, Clock, AlertTriangle, Send, Archive, ShieldCheck, RefreshCw, 
+  Pencil, Trash2, Eye, LayoutGrid, LayoutList
+} from 'lucide-react';
+import DevisForm, { DevisFormSubmitData } from '@/components/forms/DevisForm';
+import { Label } from '@/components/ui/label';
+import EditQuoteModal from '@/components/quotes/EditQuoteModal';
+import DeleteQuoteDialog from '@/components/quotes/DeleteQuoteDialog';
+import QuoteList from '@/components/quotes/QuoteList';
+import InteractiveQuoteCard from '@/components/quotes/InteractiveQuoteCard';
+import QuoteListView from '@/components/quotes/QuoteListView';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { InteractiveGrid } from '@/components/ui/interactive-grid';
+
+// Type pour les modes d'affichage disponibles
+type ViewMode = 'cards' | 'interactive' | 'list';
+
+const AdminDevisPage = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  const [devisList, setDevisList] = useState<DevisType[]>([]);
+  const [filteredDevis, setFilteredDevis] = useState<DevisType[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+
+  const [isRejectionDialogOpen, setIsRejectionDialogOpen] = useState(false);
+  const [rejectionReason, setRejectionReason] = useState('');
+  const [devisToUpdate, setDevisToUpdate] = useState<DevisType | null>(null);
+  const [selectedDevis, setSelectedDevis] = useState<DevisType | null>(null);
+  const [viewMode, setViewMode] = useState<ViewMode>('interactive');
+
+  // États pour les nouveaux modaux
+  const [isCreateDevisDialogOpen, setIsCreateDevisDialogOpen] = useState(false);
+  const [isSubmittingDevis, setIsSubmittingDevis] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [devisToEdit, setDevisToEdit] = useState<string | null>(null);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [devisToDelete, setDevisToDelete] = useState<DevisType | null>(null);
+  const [animationReady, setAnimationReady] = useState(false);
+
+  // Handler pour ouvrir le modal d'édition d'un devis
+  const handleEditDevis = (devisId: string) => {
+    setDevisToEdit(devisId);
+    setIsEditModalOpen(true);
+  };
+
+  // Handler pour ouvrir le dialog de confirmation de suppression
+  const handleDeleteDevis = (devis: DevisType) => {
+    setDevisToDelete(devis);
+    setIsDeleteDialogOpen(true);
+  };
+
+  useEffect(() => {
+    if (location.state?.openCreateDevisDialog) {
+      setIsCreateDevisDialogOpen(true);
+      navigate(location.pathname, { replace: true, state: {} });
+    }
+  }, [location.state, navigate, location.pathname]);
+
+  const getStatusBadge = (status: DevisType['status']) => {
+    const variants: { [key in DevisType['status']]: string } = {
+      draft: 'bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-200',
+      sent: 'bg-blue-100 text-blue-800 dark:bg-blue-700 dark:text-blue-200',
+      pending: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-600 dark:text-yellow-100',
+      approved: 'bg-green-100 text-green-800 dark:bg-green-700 dark:text-green-100',
+      validated: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-700 dark:text-indigo-100', // Couleur pour 'validated'
+      rejected: 'bg-red-100 text-red-800 dark:bg-red-700 dark:text-red-100',
+      expired: 'bg-orange-100 text-orange-800 dark:bg-orange-600 dark:text-orange-100',
+    };
+    return variants[status] || 'bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-200';
+  };
+
+  const getStatusLabel = (status: DevisType['status']) => {
+    const labels: { [key in DevisType['status']]: string } = {
+      draft: 'Brouillon',
+      sent: 'Envoyé',
+      pending: 'En attente',
+      approved: 'Approuvé',
+      validated: 'Validé',
+      rejected: 'Rejeté',
+      expired: 'Expiré'
+    };
+    return labels[status] || status;
+  };
+
+  const fetchAllDevis = async () => {
+    setLoading(true);
+    try {
+      const data = await devisApi.getAllDevis();
+      setDevisList(data);
+      setFilteredDevis(data);
+    } catch (error) {
+      console.error('Erreur lors du chargement des devis:', error);
+      toast.error("Erreur lors du chargement des devis");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchAllDevis();
+  }, []);
+
+  const handleDownloadPDF = async (devis: DevisType) => {
+    setActionLoading(devis.id);
+    try {
+      await downloadDevisPdf(devis);
+      toast.success(`Le devis ${devis.number} a été téléchargé`);
+    } catch (error) {
+      console.error('Erreur lors du téléchargement du PDF:', error);
+      toast.error("Échec du téléchargement");
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleCreateDevisSubmitInDialog = async (data: DevisFormSubmitData) => {
+    setIsSubmittingDevis(true);
+    try {
+      await devisApi.createDevis(data);
+      setIsCreateDevisDialogOpen(false);
+      fetchAllDevis();
+      toast.success("Devis créé avec succès!");
+    } catch (error) {
+      console.error('Erreur lors de la création du devis:', error);
+      toast.error("Erreur lors de la création du devis");
+    } finally {
+      setIsSubmittingDevis(false);
+    }
+  };
+
+  const confirmRejection = async () => {
+    if (!devisToUpdate || !rejectionReason.trim()) return;
+    
+    setActionLoading(devisToUpdate.id);
+    try {
+      await devisApi.updateDevisStatus(devisToUpdate.id, 'rejected', rejectionReason);
+      fetchAllDevis();
+      setIsRejectionDialogOpen(false);
+      setRejectionReason('');
+      toast.success(`Devis ${devisToUpdate.number} marqué comme rejeté`);
+    } catch (error) {
+      console.error('Erreur lors de la mise à jour du statut:', error);
+      toast.error("Échec de la mise à jour du statut");
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleUpdateStatus = async (devisId: string, newStatus: DevisType['status']) => {
+    setActionLoading(devisId);
+    try {
+      if (newStatus === 'rejected') {
+        const devis = devisList.find(d => d.id === devisId);
+        if (devis) {
+          setDevisToUpdate(devis);
+          setIsRejectionDialogOpen(true);
+        }
+      } else {
+        await devisApi.updateDevisStatus(devisId, newStatus);
+        fetchAllDevis();
+        toast.success(`Statut mis à jour avec succès`);
+      }
+    } catch (error) {
+      console.error('Erreur lors de la mise à jour du statut:', error);
+      toast.error("Échec de la mise à jour du statut");
+    } finally {
+      if (newStatus !== 'rejected') {
+        setActionLoading(null);
+      }
+    }
+  };
+
+  const handleConvertToInvoice = async (devis: DevisType) => {
+    if (!devis || devis.status !== 'validated') {
+      toast.error("Le devis doit être validé pour être converti en facture");
+      return;
+    }
+
+    setActionLoading(devis.id);
+    try {
+      await invoicesApi.createInvoiceFromDevis(devis.id);
+      toast.success(`Le devis ${devis.number} a été converti en facture`);
+      fetchAllDevis(); // Rafraîchir pour mettre à jour le statut du devis
+    } catch (error) {
+      console.error('Erreur lors de la conversion en facture:', error);
+      toast.error("Échec de la conversion en facture");
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleSearchChange = (search: string) => {
+    setSearchTerm(search);
+    applyFilters(search, statusFilter);
+  };
+
+  const handleStatusFilterChange = (status: string) => {
+    setStatusFilter(status);
+    applyFilters(searchTerm, status);
+  };
+
+  const applyFilters = (search: string, status: string) => {
+    let filtered = devisList;
+    
+    // Filtrage par texte
+    if (search.trim()) {
+      filtered = filtered.filter(devis =>
+        devis.number.toLowerCase().includes(search.toLowerCase()) ||
+        devis.companyName.toLowerCase().includes(search.toLowerCase()) ||
+        devis.object.toLowerCase().includes(search.toLowerCase()) ||
+        (devis.notes && devis.notes.toLowerCase().includes(search.toLowerCase()))
+      );
+    }
+
+    // Filtrage par statut
+    if (status !== 'all') {
+      filtered = filtered.filter(devis => devis.status === status);
+    }
+
+    setFilteredDevis(filtered);
+  };
+
+  const availableStatuses: DevisType['status'][] = ['draft', 'sent', 'pending', 'approved', 'validated', 'rejected', 'expired'];
+
+  useEffect(() => {
+    if (!loading && devisList.length > 0) {
+      // Délai plus important pour s'assurer que le DOM est complètement prêt
+      // et que l'écran de chargement a disparu
+      const timer = setTimeout(() => {
+        setAnimationReady(true);
+      }, 300);
+      return () => clearTimeout(timer);
+    } else {
+      // Réinitialiser l'état d'animation si les données sont en cours de chargement
+      setAnimationReady(false);
+    }
+  }, [loading, devisList]);
+
+  if (loading && devisList.length === 0) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-arcadis-orange mx-auto"></div>
+          <p className="mt-4 text-muted-foreground">Chargement des devis...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold text-foreground">Gestion des Devis</h1>
+          <p className="text-muted-foreground mt-1">Consultez et gérez tous les devis clients.</p>
+        </div>
+          
+        <div className="flex items-center gap-4">
+          <TooltipProvider>
+            <div className="flex items-center bg-muted/40 rounded-lg p-1 border shadow-sm">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button 
+                    variant={viewMode === 'interactive' ? "secondary" : "ghost"} 
+                    size="sm" 
+                    onClick={() => setViewMode('interactive')} 
+                    className="px-3"
+                  >
+                    <LayoutGrid className="h-4 w-4 mr-1" />
+                    <span className="sr-only sm:not-sr-only sm:inline-block">Cartes</span>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Vue en cartes interactives</p>
+                </TooltipContent>
+              </Tooltip>
+              
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button 
+                    variant={viewMode === 'list' ? "secondary" : "ghost"} 
+                    size="sm" 
+                    onClick={() => setViewMode('list')} 
+                    className="px-3"
+                  >
+                    <LayoutList className="h-4 w-4 mr-1" />
+                    <span className="sr-only sm:not-sr-only sm:inline-block">Tableau</span>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Vue en tableau</p>
+                </TooltipContent>
+              </Tooltip>
+              
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button 
+                    variant={viewMode === 'cards' ? "secondary" : "ghost"} 
+                    size="sm" 
+                    onClick={() => setViewMode('cards')} 
+                    className="px-3"
+                  >
+                    <FileText className="h-4 w-4 mr-1" />
+                    <span className="sr-only sm:not-sr-only sm:inline-block">Standard</span>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Vue standard</p>
+                </TooltipContent>
+              </Tooltip>
+            </div>
+          </TooltipProvider>
+          
+          <Dialog open={isCreateDevisDialogOpen} onOpenChange={setIsCreateDevisDialogOpen}>
+            <SafeDialogTrigger asChild>
+              <Button className="flex-shrink-0 flex items-center gap-2 w-auto">
+                <Plus className="h-4 w-4" /> Nouveau Devis
+              </Button>
+            </SafeDialogTrigger>
+            <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>Créer un Nouveau Devis</DialogTitle>
+                <DialogDescription>
+                  Remplissez les informations ci-dessous pour générer un nouveau devis.
+                </DialogDescription>
+              </DialogHeader>
+              <DevisForm
+                onSubmit={handleCreateDevisSubmitInDialog}
+                onCancel={() => setIsCreateDevisDialogOpen(false)}
+                isLoading={isSubmittingDevis}
+              />
+            </DialogContent>
+          </Dialog>
+        </div>
+      </div>
+        
+      <AnimatePresence mode="wait" initial={false}>
+        <motion.div
+          key={viewMode}
+          initial={{ opacity: 0, y: 20 }}
+          animate={animationReady ? { opacity: 1, y: 0 } : { opacity: 0, y: 20 }}
+          exit={{ opacity: 0, y: -20 }}
+          transition={{ 
+            duration: 0.5, 
+            ease: [0.22, 1, 0.36, 1],
+            opacity: { duration: 0.4 },
+            y: { type: "spring", stiffness: 100, damping: 15 }
+          }}
+        >
+          {viewMode === 'cards' && (
+            <QuoteList
+              quotes={filteredDevis}
+              isLoading={loading}
+              isAdmin={true}
+              onSearchChange={handleSearchChange}
+              onStatusFilterChange={handleStatusFilterChange}
+              onEditQuote={handleEditDevis}
+              onDeleteQuote={handleDeleteDevis}
+              onViewDetails={(devis) => setSelectedDevis(devis)}
+              onDownloadPdf={handleDownloadPDF}
+              onUpdateStatus={handleUpdateStatus}
+              onConvertToInvoice={handleConvertToInvoice}
+              // Ne pas ajouter onCreateQuote ici pour éviter les doublons avec le bouton d'en-tête
+              actionLoading={actionLoading}
+            />
+          )}
+
+          {viewMode === 'interactive' && (
+            <div>
+              <div className="space-y-5">
+                <div className="flex flex-col sm:flex-row gap-4 justify-between items-center">
+                  <div className="w-full flex flex-1 items-center gap-2 relative max-w-md">
+                    <SearchIcon className="h-4 w-4 absolute left-3 text-muted-foreground" />
+                    <Input 
+                      placeholder="Rechercher un devis..." 
+                      className="pl-9" 
+                      value={searchTerm}
+                      onChange={(e) => handleSearchChange(e.target.value)}
+                    />
+                  </div>
+                  <div className="w-full sm:w-auto flex items-center gap-2">
+                    <Filter className="h-4 w-4 text-muted-foreground" />
+                    <Select value={statusFilter} onValueChange={handleStatusFilterChange}>
+                      <SelectTrigger className="w-full sm:w-[200px]">
+                        <SelectValue placeholder="Filtrer par statut" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Tous les statuts</SelectItem>
+                        {availableStatuses.map((status) => (
+                          <SelectItem key={status} value={status}>
+                            {getStatusLabel(status)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                
+                <InteractiveGrid
+                  items={filteredDevis}
+                  isReady={animationReady}
+                  renderItem={(devis) => (
+                    <InteractiveQuoteCard
+                      key={devis.id}
+                      quote={devis}
+                      getStatusBadge={getStatusBadge}
+                      getStatusLabel={getStatusLabel}
+                      onDownloadPdf={() => handleDownloadPDF(devis)}
+                      onUpdateStatus={(status) => handleUpdateStatus(devis.id, status)}
+                      onConvertToInvoice={() => handleConvertToInvoice(devis)}
+                      onEdit={() => handleEditDevis(devis.id)}
+                      onDelete={() => handleDeleteDevis(devis)}
+                      isActionLoading={actionLoading === devis.id}
+                      isAdmin={true}
+                    />
+                  )}
+                />
+              </div>
+            </div>
+          )}
+
+          {viewMode === 'list' && (
+            <QuoteListView
+              quotes={filteredDevis}
+              isLoading={loading}
+              isAdmin={true}
+              onSearchChange={handleSearchChange}
+              onStatusFilterChange={handleStatusFilterChange}
+              onEditQuote={handleEditDevis}
+              onDeleteQuote={handleDeleteDevis}
+              onViewDetails={(devis) => setSelectedDevis(devis)}
+              onDownloadPdf={handleDownloadPDF}
+              onUpdateStatus={handleUpdateStatus}
+              onConvertToInvoice={handleConvertToInvoice}
+              // Ne pas ajouter onCreateQuote ici pour éviter les doublons avec le bouton d'en-tête
+              actionLoading={actionLoading}
+            />
+          )}
+        </motion.div>
+      </AnimatePresence>
+
+      <Dialog open={isRejectionDialogOpen} onOpenChange={setIsRejectionDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Enregistrer le Rejet du Devis N°{devisToUpdate?.number}</DialogTitle>
+            <DialogDescription>
+              Veuillez indiquer la raison du rejet (si communiquée par le client).
+            </DialogDescription>
+          </DialogHeader>
+          <Textarea
+              placeholder="Raison du rejet..."
+              value={rejectionReason}
+              onChange={(e) => setRejectionReason(e.target.value)}
+              rows={3}
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsRejectionDialogOpen(false)}>Annuler</Button>
+            <Button onClick={confirmRejection} variant="destructive" disabled={!rejectionReason.trim() || actionLoading === devisToUpdate?.id}>
+              Confirmer le Rejet
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      
+      {/* Modaux d'édition et de suppression */}
+      <EditQuoteModal
+        isOpen={isEditModalOpen}
+        onOpenChange={setIsEditModalOpen}
+        devisId={devisToEdit}
+        onSuccess={fetchAllDevis}
+      />
+
+      <DeleteQuoteDialog
+        isOpen={isDeleteDialogOpen}
+        onClose={() => setIsDeleteDialogOpen(false)}
+        devis={devisToDelete}
+        onSuccess={fetchAllDevis}
+      />
+    </div>
+  );
+};
+
+export default AdminDevisPage;

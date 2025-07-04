@@ -1,0 +1,17 @@
+import PaymentSuccess from '@/pages/PaymentSuccess';
+import PaymentCancel from '@/pages/PaymentCancel';
+// ...existing imports
+
+// Dans ton routeur principal (ex: App.tsx ou routes.tsx)
+// Ajoute ces routes :
+
+// ...existing routes...
+{
+  path: '/payment/success',
+  element: <PaymentSuccess />,
+},
+{
+  path: '/payment/cancel',
+  element: <PaymentCancel />,
+},
+// ...existing routes...

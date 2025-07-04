@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Dashboard Analytics - Légende Corrigée</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #f8fafc;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        .card {
+            background: white;
+            border-radius: 8px;
+            padding: 24px;
+            margin-bottom: 24px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+        
+        .card-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .legend {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px;
+            justify-content: center;
+            margin-bottom: 20px;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .color-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+        
+        .label {
+            font-size: 14px;
+            font-weight: 500;
+        }
+        
+        .chart-placeholder {
+            width: 100%;
+            height: 250px;
+            background: linear-gradient(45deg, #f1f5f9, #e2e8f0);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #64748b;
+            font-style: italic;
+        }
+        
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+        }
+        
+        .success {
+            color: #059669;
+            background: #ecfdf5;
+            border: 1px solid #a7f3d0;
+            padding: 16px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+        }
+        
+        @media (max-width: 768px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .legend {
+                gap: 12px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎯 Test Dashboard Analytics - Légende Corrigée</h1>
+        
+        <div class="success">
+            ✅ <strong>Correction Appliquée :</strong> Légende claire et séparée du graphique, plus de chevauchement !
+        </div>
+        
+        <div class="grid">
+            <!-- Camembert Tickets -->
+            <div class="card">
+                <div class="card-title">
+                    📊 Répartition des Tickets
+                </div>
+                
+                <!-- Légende personnalisée -->
+                <div class="legend">
+                    <div class="legend-item">
+                        <div class="color-dot" style="background-color: #10B981;"></div>
+                        <span class="label">Résolus: 45</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="color-dot" style="background-color: #F59E0B;"></div>
+                        <span class="label">En cours: 12</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="color-dot" style="background-color: #3B82F6;"></div>
+                        <span class="label">Proactifs: 8</span>
+                    </div>
+                </div>
+                
+                <div class="chart-placeholder">
+                    PieChart Recharts ici<br>
+                    (Sans labels internes confus)
+                </div>
+            </div>
+            
+            <!-- BarChart Factures -->
+            <div class="card">
+                <div class="card-title">
+                    📈 État des Factures
+                </div>
+                
+                <!-- Légende personnalisée -->
+                <div class="legend">
+                    <div class="legend-item">
+                        <div class="color-dot" style="background-color: #10B981;"></div>
+                        <span class="label">Payées: 28</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="color-dot" style="background-color: #F59E0B;"></div>
+                        <span class="label">En attente: 15</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="color-dot" style="background-color: #EF4444;"></div>
+                        <span class="label">En retard: 3</span>
+                    </div>
+                </div>
+                
+                <div class="chart-placeholder">
+                    BarChart Recharts ici<br>
+                    (Avec barres colorées cohérentes)
+                </div>
+            </div>
+        </div>
+        
+        <div class="card">
+            <h3>🔧 Améliorations Techniques Appliquées :</h3>
+            <ul>
+                <li><strong>Légende séparée :</strong> Plus de chevauchement de labels</li>
+                <li><strong>Pastilles colorées :</strong> Identification visuelle immédiate</li>
+                <li><strong>Valeurs précises :</strong> Chiffres affichés clairement</li>
+                <li><strong>Espacement optimisé :</strong> paddingAngle pour la lisibilité</li>
+                <li><strong>Responsive design :</strong> Adaptation mobile/desktop</li>
+                <li><strong>Cohérence visuelle :</strong> Même approche sur tous les graphiques</li>
+            </ul>
+        </div>
+        
+        <div class="card">
+            <h3>🎨 Palette de Couleurs Standardisée :</h3>
+            <div class="legend">
+                <div class="legend-item">
+                    <div class="color-dot" style="background-color: #10B981;"></div>
+                    <span class="label">Succès/Résolu/Payé</span>
+                </div>
+                <div class="legend-item">
+                    <div class="color-dot" style="background-color: #F59E0B;"></div>
+                    <span class="label">En cours/Attente</span>
+                </div>
+                <div class="legend-item">
+                    <div class="color-dot" style="background-color: #3B82F6;"></div>
+                    <span class="label">Information/Proactif</span>
+                </div>
+                <div class="legend-item">
+                    <div class="color-dot" style="background-color: #EF4444;"></div>
+                    <span class="label">Problème/Retard</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        console.log('✅ Test de la correction légende camembert dashboard analytics');
+        console.log('📊 Légende désormais claire et séparée des graphiques');
+        console.log('🎨 UX considérablement améliorée');
+    </script>
+</body>
+</html>

@@ -1,0 +1,74 @@
+/* =========================================
+   CORRECTIONS THÈME - CARTES UNIQUEMENT
+   ========================================= */
+
+/* === CARTES ET CONTAINERS SEULEMENT === */
+.bg-card,
+.card,
+[data-testid*="card"],
+[class*="Card"],
+[class*="card"] {
+  background-color: hsl(var(--card)) !important;
+  color: hsl(var(--card-foreground)) !important;
+  border: 1px solid hsl(var(--card-border)) !important;
+  border-radius: 8px !important;
+}
+
+/* === STATISTIQUES === */
+.stats-card,
+[class*="stats"],
+[class*="metric"] {
+  background-color: hsl(var(--card)) !important;
+  color: hsl(var(--card-foreground)) !important;
+  border: 2px solid hsl(var(--card-border)) !important;
+  border-radius: 12px !important;
+  padding: 16px !important;
+}
+
+/* === KANBAN BOARD === */
+.kanban-column {
+  background-color: hsl(var(--card)) !important;
+  border: 2px solid hsl(var(--card-border)) !important;
+  border-radius: 8px !important;
+  padding: 16px !important;
+}
+
+.kanban-card {
+  background-color: hsl(var(--card)) !important;
+  color: hsl(var(--card-foreground)) !important;
+  border: 1px solid hsl(var(--card-border)) !important;
+  border-radius: 6px !important;
+  padding: 12px !important;
+  margin-bottom: 8px !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1) !important;
+}
+
+/* === NAVIGATION === */
+nav, .navigation {
+  background-color: hsl(var(--card)) !important;
+  border-bottom: 1px solid hsl(var(--border)) !important;
+}
+
+/* === SIDEBAR === */
+.sidebar, [class*="sidebar"] {
+  background-color: hsl(var(--card)) !important;
+  border-right: 1px solid hsl(var(--border)) !important;
+}
+
+/* === DROPDOWN ET POPOVER === */
+.dropdown, .popover, [role="menu"] {
+  background-color: hsl(var(--popover)) !important;
+  color: hsl(var(--popover-foreground)) !important;
+  border: 1px solid hsl(var(--border)) !important;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1) !important;
+}
+
+/* === DARK MODE SPECIFIQUE CARTES === */
+.dark .bg-white {
+  background-color: hsl(var(--card)) !important;
+}
+
+.dark .border-gray-200,
+.dark .border-gray-300 {
+  border-color: hsl(var(--card-border)) !important;
+}

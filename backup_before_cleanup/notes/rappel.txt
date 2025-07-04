@@ -1,0 +1,134 @@
+**Journal de Bord du Projet Arcadis Space**
+
+Structure Générale :
+
+App.tsx : C'est le point d'entrée principal de votre application React, configurant le routage (react-router-dom), la gestion d'état global (@tanstack/react-query, AuthContext), et le thème (ThemeProvider). Il définit également des routes protégées pour les utilisateurs authentifiés et des routes spécifiques pour les administrateurs.
+main.tsx : Le fichier d'initialisation de l'application, qui rend le composant App.
+context/AuthContext.tsx : Gère l'authentification des utilisateurs avec Supabase, incluant la connexion, la déconnexion, et la récupération des profils utilisateurs avec mise en cache. Il expose un useAuth hook pour accéder à l'état d'authentification.
+hooks/use-mobile.tsx : Un hook personnalisé pour détecter si l'utilisateur est sur un appareil mobile, utile pour l'adaptation de l'interface utilisateur.
+lib/utils.ts : Contient des fonctions utilitaires (comme cn pour Tailwind CSS, formatCurrency, formatDate, formatDateTime) et probablement d'autres helpers génériques.
+services/api.ts : Semble être le point d'accès pour interagir avec votre backend (via Supabase ou des fonctions Edge), avec des APIs spécifiques pour les factures, devis, tickets, entreprises et utilisateurs.
+Composants d'Interface Utilisateur (components/) :
+
+components/auth/ : Contient les formulaires de connexion (LoginForm.tsx) et de réinitialisation de mot de passe (ForgotPasswordForm.tsx). Ils interagissent avec AuthContext et Supabase.
+components/layout/ : Définit la structure globale de votre application.
+AuthLayout.tsx : Le layout pour les pages d'authentification (login, mot de passe oublié), incluant le logo et le sélecteur de thème.
+Layout.tsx : Le layout principal de l'application, intégrant la barre latérale (AppSidebar) et l'en-tête (AppHeader). Il gère également la responsivité de la sidebar.
+AppHeader.tsx : L'en-tête de l'application, avec le bouton pour basculer la sidebar et le menu utilisateur (UserNav).
+AppSidebar.tsx : La barre latérale de navigation, qui adapte ses liens en fonction du rôle de l'utilisateur (admin/client) et gère la déconnexion.
+UserNav.tsx : Le menu déroulant de l'utilisateur dans l'en-tête, affichant les informations de l'utilisateur et permettant la déconnexion et le changement de thème.
+components/dashboard/ : Composants spécifiques au tableau de bord.
+RecentActivity.tsx : Affiche les activités récentes (devis, factures, tickets) avec des badges de statut et des icônes.
+StatsCard.tsx : Une carte réutilisable pour afficher des statistiques clés.
+components/forms/ : Contient des formulaires complexes et des composants de formulaire réutilisables.
+CompanyForm.tsx : Formulaire pour créer ou modifier une entreprise.
+DevisForm.tsx : Formulaire pour créer un devis, incluant la gestion des articles avec react-hook-form et zod.
+FactureForm.tsx : Formulaire pour créer une facture, similaire à DevisForm mais pour les factures.
+FormStyles.ts : Probablement un fichier de styles partagés pour les formulaires.
+SharedFormComponents.tsx : Composants UI réutilisables pour les formulaires (cartes, sections, boutons d'ajout/suppression d'articles).
+components/payments/DexchangePaymentModal.tsx : La modale de paiement Dexchange, permettant de sélectionner une méthode de paiement et de saisir un numéro de téléphone pour initier un paiement. C'est le fichier que nous avons récemment mis à jour.
+components/theme/ : Gère le thème de l'application.
+ThemeProvider.tsx : Le contexte et le fournisseur de thème (clair/sombre/système).
+ThemeSwitcher.tsx : Un composant pour basculer entre les thèmes.
+components/ui/ : Un ensemble de composants UI génériques (shadcn/ui), tels que Button, Input, Label, Card, Dialog, Select, Badge, Table, AlertDialog, DropdownMenu, Tooltip, Toaster, etc. Ces composants sont les blocs de construction de votre interface.
+Pages de l'Application (pages/) :
+
+Pages Client :
+Dashboard.tsx : Le tableau de bord principal pour les clients, affichant des statistiques et activités pertinentes.
+Devis.tsx : Page listant les devis du client, avec filtres, recherche et actions (approuver, rejeter, télécharger PDF).
+Factures.tsx : Page listant les factures du client, avec filtres, recherche, téléchargement PDF et intégration de la modale de paiement Dexchange.
+Support.tsx : Page de gestion des tickets de support pour les clients, permettant de créer de nouveaux tickets et de suivre les conversations.
+Profile.tsx : Page de profil utilisateur pour modifier les informations personnelles.
+UpdatePassword.tsx : Page pour mettre à jour le mot de passe après une réinitialisation.
+Pages Admin (pages/admin/) :
+AdminDevis.tsx : Gestion des devis pour les administrateurs, avec des fonctionnalités de création, de modification de statut (y compris la conversion en facture) et de suppression.
+AdminFactures.tsx : Gestion des factures pour les administrateurs, avec création, marquage comme payé, et visualisation des détails.
+AdminSupport.tsx : Gestion des tickets de support pour les administrateurs, permettant de répondre, de modifier le statut, la priorité, la catégorie et l'assignation.
+Companies.tsx : Gestion des entreprises clientes (CRUD).
+Users.tsx : Gestion des utilisateurs (CRUD), avec des fonctionnalités pour activer/désactiver, supprimer (soft/hard) et filtrer par rôle/entreprise.
+Pages Diverses :
+Index.tsx : Une simple redirection vers le tableau de bord.
+NotFound.tsx : Page d'erreur 404.
+Assets :
+
+assets/wave.png, assets/om.png, assets/wizall.png : Logos des méthodes de paiement.
+public/logo/logo-header.png : Le logo de votre application.
+Base de Données (supabase/migrations/20250622104650_remote_schema.sql) :
+
+J'ai une compréhension claire de votre schéma de base de données Supabase, avec des tables pour companies, devis, devis_items, invoices, invoice_items, tickets, ticket_categories, ticket_messages, ticket_attachments, et users.
+Les politiques RLS (Row Level Security) sont bien définies pour contrôler l'accès aux données en fonction du rôle de l'utilisateur (admin ou client) et de l'appartenance à une company.
+Des fonctions PL/pgSQL (get_my_role, get_user_company_id, get_user_role, set_custom_claims, update_devis_status_by_client) sont utilisées pour la logique métier et la sécurité.
+En résumé, votre projet est une application web complète de gestion client (CRM/ERP léger) avec des fonctionnalités de devis, facturation, support client et administration, construite avec React, Supabase et une interface utilisateur basée sur shadcn/ui. La séparation des préoccupations est bien présente, et la gestion des rôles et des permissions est intégrée au niveau de la base de données via RLS.
+ 
+**Mises à Jour Récentes et Contexte Actuel :**
+ 
+*   **Analyse Approfondie du Dossier `/src` :** J'ai parcouru en détail l'intégralité de votre dossier `src`, comprenant les composants UI, les pages client/admin, les hooks, les services API, et la gestion d'authentification. J'ai une vision claire de l'architecture frontend et de la manière dont les différentes parties de l'application interagissent.
+
+**Méthodologie de Développement "Synapse" d'Arcadis Tech :**
+
+## Introduction : Un Changement de Paradigme
+
+La méthode "Synapse" est une approche propriétaire et intégrée du développement logiciel conçue par Arcadis Tech. Elle ne vise pas simplement à accélérer les cycles de développement traditionnels, mais à les remplacer par un nouveau paradigme.
+
+Le principe fondamental est de transformer le rôle du développeur humain. Il n'est plus un artisan dont la tâche principale est d'écrire du code ligne par ligne, mais un Pilote Stratégique qui supervise et dirige des systèmes d'ingénierie assistée par IA. L'objectif est de consacrer 100% du temps humain aux tâches à plus haute valeur ajoutée : l'architecture, la logique métier, la sécurité, les tests stratégiques et la validation finale.
+
+## Les Trois Piliers de la Méthode Synapse
+
+Notre efficacité repose sur la symbiose parfaite de trois rôles distincts et complémentaires :
+
+### L'Architecte (Rôle tenu par l'IA conversationnelle)
+
+**Fonction** : Le Penseur Stratégique et le Concepteur de Mission.
+
+**Responsabilités** :
+- Comprendre en profondeur le besoin métier et la vision globale du produit ou de la fonctionnalité.
+- Définir la stratégie technique et l'architecture de haut niveau du projet.
+- Découper les grandes fonctionnalités en missions logiques, complètes et cohérentes.
+- Produire des "prompts de mission" détaillés et non ambigus qui servent de cahier des charges technique précis pour l'Ingénieur.
+
+### L'Ingénieur (Rôle tenu par l'IA d'assistance au code)
+
+**Fonction** : Le Bâtisseur Autonome et l'Exécuteur Technique.
+
+**Responsabilités** :
+- Recevoir, interpréter et comprendre les prompts de mission fournis par l'Architecte.
+- Générer l'intégralité du code, des fichiers de configuration, des scripts, des schémas de base de données et des commandes nécessaires.
+- Assurer la cohérence syntaxique, le respect des meilleures pratiques de codage, la performance et la conformité aux standards techniques.
+
+### Le Pilote (Rôle tenu par le développeur humain)
+
+**Fonction** : Le Chef de Projet, l'Intégrateur, le Garant Qualité et le Débogueur Stratégique.
+
+**Responsabilités** :
+- Piloter la collaboration : Initier les missions auprès de l'Architecte, fournir le contexte métier et les informations nécessaires aux IA.
+- Intégrer : Examiner le code et les artefacts générés par l'Ingénieur, les placer aux bons endroits dans la structure du projet.
+- Tester et Valider : Exécuter des tests fonctionnels rigoureux pour valider que le résultat répond parfaitement à l'objectif de la mission.
+- Déboguer : Identifier, qualifier et résoudre les problèmes complexes qui échappent aux capacités des IA.
+
+## Le Processus "Synapse" en Action
+
+Un cycle de développement typique suit ces étapes itératives :
+
+1. **Briefing Stratégique** : Le Pilote et l'Architecte définissent l'objectif de haut niveau de la prochaine mission.
+2. **Génération du Prompt** : L'Architecte produit le prompt de mission détaillé, incluant toutes les spécifications techniques et les attentes.
+3. **Exécution par l'Ingénieur** : Le Pilote transmet le prompt à l'Ingénieur pour générer ou modifier le code et les configurations nécessaires.
+4. **Intégration & Test par le Pilote** : Le Pilote examine le travail, intègre les modifications et effectue des tests de validation rigoureux.
+5. **Validation de Mission** : Une fois la fonctionnalité validée, la mission est déclarée terminée.
+6. **Itération** : Le cycle recommence pour la mission suivante, affinant le projet de manière incrémentale.
+
+## L'Avantage Stratégique de la Méthode "Synapse"
+
+La méthode "Synapse" offre des avantages compétitifs significatifs :
+
+- **Vélocité Extrême** : Automatisation de la génération de code, réduction drastique des temps de développement.
+- **Qualité et Cohérence** : Code généré de manière holistique et cohérente par l'IA, réduisant les erreurs d'intégration.
+- **Focalisation sur la Valeur** : Talent humain entièrement dédié à la réflexion stratégique, à la logique métier complexe, à la sécurité et à l'innovation.
+- **Gestion du Contexte IA** : Intégration de la gestion des limites techniques des LLM en organisant les interactions et les passations de mission.
+
+C'est cet actif propriétaire qui définit Arcadis Tech et qui permet de livrer des solutions de haute qualité à une vitesse et un coût qui redéfinissent les standards du marché.
+
+
+
+
+
+

@@ -61,6 +61,7 @@ interface DbInvoice {
     id: string;
     number: string;
     company_id: string;
+    object: string;  // Ajout de la propriété object
     amount: string;
     status: Invoice['status'];
     created_at: string;
@@ -226,6 +227,7 @@ const mapInvoiceFromDb = (dbInvoice: DbInvoice): Invoice => ({
     number: dbInvoice.number,
     companyId: dbInvoice.company_id,
     companyName: dbInvoice.companies?.name || 'N/A',
+    object: dbInvoice.object || `Facture ${dbInvoice.number}`, // Ajout de la propriété object avec valeur par défaut
     amount: parseFloat(dbInvoice.amount),
     status: dbInvoice.status,
     createdAt: new Date(dbInvoice.created_at),
@@ -289,23 +291,50 @@ export const mapUserFromDb = (dbUser: DbUser): UserProfile => ({
 
 export const devisApi = {
     getAll: async (): Promise<Devis[]> => {
-        const { data, error } = await supabase
-            .from('devis')
-            .select('*, companies(name), devis_items(*)')
-            .order('created_at', { ascending: false });
-        if (error) throw error;
-        return data.map(mapDevisFromDb);
+        try {
+            const { data, error } = await supabase.from('devis').select('*, companies(name), devis_items(*)').order('created_at', { ascending: false });
+            if (error) {
+                console.error('[API Error] getAll devis:', error);
+                throw error;
+            }
+            
+            // Vérifier si les données sont valides
+            if (!data) {
+                console.error('[API Error] getAll devis: No data returned');
+                throw new Error('Aucune donnée retournée par l\'API');
+            }
+            
+            return data.map(mapDevisFromDb);
+        } catch (e) {
+            console.error('[API Exception] getAll devis:', e);
+            throw e;
+        }
     },
-
     getByCompany: async (companyId: string): Promise<Devis[]> => {
-        if (!companyId) return [];
-        const { data, error } = await supabase
-            .from('devis')
-            .select('*, companies(name), devis_items(*)')
-            .eq('company_id', companyId)
-            .order('created_at', { ascending: false });
-        if (error) throw error;
-        return data.map(mapDevisFromDb);
+        try {
+            if (!companyId) {
+                console.warn('[API Warning] getByCompany devis: No companyId provided');
+                return [];
+            }
+
+            const { data, error } = await supabase.from('devis').select('*, companies(name), devis_items(*)').eq('company_id', companyId).order('created_at', { ascending: false });
+            
+            if (error) {
+                console.error('[API Error] getByCompany devis:', error);
+                throw error;
+            }
+            
+            // Vérifier si les données sont valides
+            if (!data) {
+                console.error('[API Error] getByCompany devis: No data returned');
+                throw new Error('Aucune donnée retournée par l\'API');
+            }
+            
+            return data.map(mapDevisFromDb);
+        } catch (e) {
+            console.error('[API Exception] getByCompany devis:', e);
+            throw e;
+        }
     },
 
     updateStatus: async (id: string, status: Devis['status'], rejectionReason?: string): Promise<Devis> => {
@@ -404,6 +433,7 @@ export const invoicesApi = {
         const invoiceToInsert = {
             number: invoiceNumber,
             company_id: invoiceData.companyId,
+            object: invoiceData.object,
             amount: invoiceData.amount.toString(),
             // MODIFICATION: La valeur par défaut est maintenant 'draft' pour être cohérente avec le nouveau flux.
             status: invoiceData.status || 'draft',
@@ -439,7 +469,7 @@ export const invoicesApi = {
         if (data.error) throw new Error(data.error);
         return mapInvoiceFromDb(data.invoice);
     },
-    initiateDexchangePayment: async (invoiceId: string, paymentMethod: string, phoneNumber: string): Promise<{ paymentUrl: string }> => {
+    initiateDexchangePayment: async (invoiceId: string, paymentMethod: string, phoneNumber: string): Promise<{ paymentUrl?: string, transactionId: string, paymentCode?: string, paymentInstructions?: string }> => {
         const { data, error } = await supabase.functions.invoke('initiate-payment', {
             body: {
                 invoice_id: invoiceId,
@@ -447,12 +477,21 @@ export const invoicesApi = {
                 phone_number: phoneNumber,
             },
         });
-
-        if (error) throw new Error(error.message);
+        
+        if (error) throw new Error(error.message || "Erreur lors de l'appel à la fonction de paiement");
         if (data.error) throw new Error(data.error);
-        if (!data.paymentUrl) throw new Error("URL de paiement non reçue de l'API.");
 
-        return data;
+        // URL de paiement requise uniquement pour certaines méthodes (pas pour Orange Money)
+        if (!data.paymentUrl && paymentMethod !== 'orange_money') {
+            console.warn(`[API] Aucune URL de paiement retournée pour la méthode ${paymentMethod}`);
+        }
+
+        return {
+            paymentUrl: data.paymentUrl,
+            transactionId: data.transactionId,
+            paymentCode: data.paymentCode,
+            paymentInstructions: data.paymentInstructions
+        };
     },
 };
 

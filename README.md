@@ -1,13 +1,24 @@
-# Welcome to your project: Arcadis Space
+# Projet MySpace
 
-## Project info
+## À propos du projet
 
-This project is a client portal for Arcadis Technologies.
+MySpace est un portail client moderne développé pour Arcadis Technologies, offrant une gestion complète des factures, devis et paiements.
 
-## How can I edit this code?
+## Documentation
 
-You can work locally using your own IDE. Clone this repo and push changes.
+La documentation complète du projet est disponible dans le répertoire `/docs` :
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+- [Planning et feuilles de route](/docs/planning/) - Plans de développement et d'amélioration
+- [Journal des modifications](/docs/journal/) - Suivi des changements et corrections
+- [Guides et standards](/docs/guidelines/) - Guides techniques et bonnes pratiques
 
-Follow these steps:
+Documents essentiels :
+- [Plan de nettoyage du code](/docs/planning/PLAN-NETTOYAGE-CODE.md)
+- [Suivi du plan](/docs/journal/SUIVI-PLAN-NETTOYAGE.md)
+- [Prochaines étapes](/docs/planning/PLAN-PROCHAINE-PHASE-NETTOYAGE.md)
+
+## Configuration du projet
+
+Ce projet utilise Node.js & npm. Installation recommandée via [nvm](https://github.com/nvm-sh/nvm#installing-and-updating).
+
+Pour démarrer le développement :

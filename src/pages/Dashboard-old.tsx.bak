@@ -1,0 +1,1142 @@
+// src/pages/Dashboard.tsx - Dashboard style "iOS Fences" Sprint 6
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '@/context/AuthContext';
+import { devisApi, invoicesApi, ticketsApi, companiesApi, usersApi } from '@/services/api';
+import { Devis, Invoice, Ticket } from '@/types';
+import { motion, AnimatePresence } from 'framer-motion';
+import {
+  TrendingUp,
+  ClipboardList,
+  MessageSquare,
+  Building,
+  Users,
+  FileText,
+  WifiOff,
+  RefreshCw,
+  Plus,
+  ArrowUpRight,
+  Brain,
+  DollarSign,
+  Clock,
+  AlertTriangle,
+  CheckCircle,
+  Eye,
+  Zap,
+  BarChart3,
+  Timer,
+  Calendar
+} from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { cn, formatCurrency, formatDate } from '@/lib/utils';
+
+// Types pour les fences iOS
+interface FenceItem {
+  id: string;
+  title: string;
+  subtitle?: string;
+  value?: string;
+  amount?: string;
+  status?: 'success' | 'warning' | 'error' | 'info';
+  date?: string;
+  action?: () => void;
+}
+
+interface Fence {
+  id: string;
+  title: string;
+  description?: string;
+  icon: React.ElementType;
+  color: 'blue' | 'green' | 'amber' | 'purple' | 'emerald' | 'slate';
+  items: FenceItem[];
+  actions?: {
+    primary: { label: string; action: () => void };
+    secondary?: { label: string; action: () => void };
+  };
+}
+
+// Configuration des couleurs pour les fences
+const fenceColors = {
+  blue: {
+    bg: 'bg-blue-50',
+    border: 'border-blue-100',
+    icon: 'text-blue-600',
+    hover: 'hover:bg-blue-100'
+  },
+  green: {
+    bg: 'bg-green-50',
+    border: 'border-green-100', 
+    icon: 'text-green-600',
+    hover: 'hover:bg-green-100'
+  },
+  amber: {
+    bg: 'bg-amber-50',
+    border: 'border-amber-100',
+    icon: 'text-amber-600',
+    hover: 'hover:bg-amber-100'
+  },
+  purple: {
+    bg: 'bg-purple-50',
+    border: 'border-purple-100',
+    icon: 'text-purple-600',
+    hover: 'hover:bg-purple-100'
+  },
+  emerald: {
+    bg: 'bg-emerald-50',
+    border: 'border-emerald-100',
+    icon: 'text-emerald-600',
+    hover: 'hover:bg-emerald-100'
+  },
+  slate: {
+    bg: 'bg-slate-50',
+    border: 'border-slate-100',
+    icon: 'text-slate-600',
+    hover: 'hover:bg-slate-100'
+  }
+};
+
+const Dashboard: React.FC = () => {
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const [devisList, setDevisList] = useState<Devis[]>([]);
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [tickets, setTickets] = useState<Ticket[]>([]);
+  const [companiesCount, setCompaniesCount] = useState(0);
+  const [usersCount, setUsersCount] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [isOffline, setIsOffline] = useState(!navigator.onLine);
+  const isMounted = useRef(true);
+
+  // Fonction de chargement des données
+  const loadDashboardData = useCallback(async () => {
+    if (!isMounted.current || isOffline) {
+      setLoading(false);
+      return;
+    }
+    
+    setLoading(true);
+    setLoadError(null);
+    
+    try {
+      const results = await Promise.allSettled([
+        user?.role === 'admin' ? devisApi.getAll() : devisApi.getByCompany(user?.companyId || ''),
+        user?.role === 'admin' ? invoicesApi.getAll() : invoicesApi.getByCompany(user?.companyId || ''),
+        user?.role === 'admin' ? ticketsApi.getAll() : ticketsApi.getByCompany(user?.companyId || ''),
+        ...(user?.role === 'admin' ? [
+          companiesApi.getAll(),
+          usersApi.getAll()
+        ] : [])
+      ]);
+      
+      if (isMounted.current) {
+        const [devisResult, invoicesResult, ticketsResult, companiesResult, usersResult] = results;
+        
+        if (devisResult.status === 'fulfilled') {
+          setDevisList(devisResult.value);
+        }
+        if (invoicesResult.status === 'fulfilled') {
+          setInvoices(invoicesResult.value);
+        }
+        if (ticketsResult.status === 'fulfilled') {
+          setTickets(ticketsResult.value);
+        }
+        if (user?.role === 'admin') {
+          if (companiesResult?.status === 'fulfilled') {
+            setCompaniesCount(companiesResult.value.length);
+          }
+          if (usersResult?.status === 'fulfilled') {
+            setUsersCount(usersResult.value.length);
+          }
+        }
+      }
+    } catch (error) {
+      if (isMounted.current) {
+        setLoadError('Erreur lors du chargement des données');
+        console.error('Erreur dashboard:', error);
+      }
+    } finally {
+      if (isMounted.current) {
+        setLoading(false);
+      }
+    }
+  }, [user, isOffline]);
+
+  // Gestionnaires d'événements réseau
+  useEffect(() => {
+    const updateOnlineStatus = () => {
+      setIsOffline(!navigator.onLine);
+    };
+
+    window.addEventListener('online', updateOnlineStatus);
+    window.addEventListener('offline', updateOnlineStatus);
+    
+    return () => {
+      window.removeEventListener('online', updateOnlineStatus);
+      window.removeEventListener('offline', updateOnlineStatus);
+    };
+  }, []);
+
+  // Chargement initial des données
+  useEffect(() => {
+    loadDashboardData();
+    return () => {
+      isMounted.current = false;
+    };
+  }, [loadDashboardData]);
+
+  // Calcul des statistiques
+  const stats = useMemo(() => {
+    const invoicesStats = invoices.reduce((acc, invoice) => {
+      const amount = parseFloat(invoice.amount.toString());
+      acc.totalAmount += amount;
+      if (invoice.status === 'pending') acc.pendingAmount += amount;
+      if (invoice.status === 'late') acc.overdueAmount += amount;
+      return acc;
+    }, { totalAmount: 0, pendingAmount: 0, overdueAmount: 0 });
+
+    return {
+      ...invoicesStats,
+      invoicesCount: invoices.length,
+      devisCount: devisList.length,
+      openTickets: tickets.filter(t => t.status === 'open').length,
+      companiesCount,
+      usersCount
+    };
+  }, [invoices, devisList, tickets, companiesCount, usersCount]);
+
+  // Configuration des fences (sections)
+  const fences = useMemo((): Fence[] => {
+    const fencesList: Fence[] = [
+      {
+        id: 'revenue',
+        title: 'Chiffre d\'affaires',
+        description: `${formatCurrency(stats.totalAmount)} total`,
+        icon: DollarSign,
+        color: 'emerald',
+        items: [
+          { 
+            id: 'total', 
+            title: 'Total facturé', 
+            value: formatCurrency(stats.totalAmount), 
+            status: 'success' 
+          },
+          { 
+            id: 'pending', 
+            title: 'En attente', 
+            value: formatCurrency(stats.pendingAmount), 
+            status: 'warning' 
+          },
+          { 
+            id: 'overdue', 
+            title: 'En retard', 
+            value: formatCurrency(stats.overdueAmount), 
+            status: 'error' 
+          }
+        ],
+        actions: {
+          primary: { label: 'Voir rapports', action: () => navigate('/admin/rapports') }
+        }
+      },
+      {
+        id: 'invoices',
+        title: 'Factures récentes',
+        description: `${stats.invoicesCount} factures`,
+        icon: FileText,
+        color: 'blue',
+        items: invoices.slice(0, 4).map(invoice => ({
+          id: invoice.id,
+          title: `Facture ${invoice.number}`,
+          subtitle: invoice.companyName,
+          amount: formatCurrency(parseFloat(invoice.amount.toString())),
+          status: invoice.status === 'paid' ? 'success' : invoice.status === 'late' ? 'error' : 'warning',
+          date: formatDate(new Date(invoice.createdAt)),
+          action: () => navigate(`/factures/${invoice.id}`)
+        })),
+        actions: {
+          primary: { label: 'Toutes les factures', action: () => navigate(user?.role === 'admin' ? '/admin/factures' : '/factures') },
+          secondary: { label: 'Nouvelle facture', action: () => navigate('/factures/new') }
+        }
+      },
+      {
+        id: 'quotes',
+        title: 'Devis récents',
+        description: `${stats.devisCount} devis`,
+        icon: ClipboardList,
+        color: 'amber',
+        items: devisList.slice(0, 4).map(devis => ({
+          id: devis.id,
+          title: `Devis ${devis.number}`,
+          subtitle: devis.companyName,
+          amount: formatCurrency(parseFloat(devis.amount.toString())),
+          status: devis.status === 'approved' ? 'success' : devis.status === 'rejected' ? 'error' : 'warning',
+          date: formatDate(new Date(devis.createdAt)),
+          action: () => navigate(`/devis/${devis.id}`)
+        })),
+        actions: {
+          primary: { label: 'Tous les devis', action: () => navigate(user?.role === 'admin' ? '/admin/devis' : '/devis') },
+          secondary: { label: 'Nouveau devis', action: () => navigate('/devis/new') }
+        }
+      },
+      {
+        id: 'support',
+        title: 'Support',
+        description: `${stats.openTickets} tickets ouverts`,
+        icon: MessageSquare,
+        color: 'purple',
+        items: tickets.slice(0, 4).map(ticket => ({
+          id: ticket.id,
+          title: ticket.subject || `Ticket #${ticket.number}`,
+          subtitle: ticket.companyName || 'Client',
+          status: ticket.status === 'closed' ? 'success' : ticket.status === 'open' ? 'error' : 'warning',
+          date: formatDate(new Date(ticket.createdAt)),
+          action: () => navigate(`/support/${ticket.id}`)
+        })),
+        actions: {
+          primary: { label: 'Voir tickets', action: () => navigate(user?.role === 'admin' ? '/admin/support' : '/support') }
+        }
+      }
+    ];
+
+    // Ajouter les fences admin
+    if (user?.role === 'admin') {
+      fencesList.push({
+        id: 'management',
+        title: 'Administration',
+        description: `${stats.companiesCount} entreprises • ${stats.usersCount} utilisateurs`,
+        icon: Building,
+        color: 'slate',
+        items: [
+          { 
+            id: 'companies', 
+            title: 'Entreprises', 
+            value: stats.companiesCount.toString(), 
+            action: () => navigate('/admin/companies') 
+          },
+          { 
+            id: 'users', 
+            title: 'Utilisateurs', 
+            value: stats.usersCount.toString(), 
+            action: () => navigate('/admin/users') 
+          },
+          { 
+            id: 'settings', 
+            title: 'Configuration', 
+            value: 'Système', 
+            action: () => navigate('/admin/settings') 
+          },
+          { 
+            id: 'reports', 
+            title: 'Rapports', 
+            value: 'Analytics', 
+            action: () => navigate('/admin/rapports') 
+          }
+        ],
+        actions: {
+          primary: { label: 'Administration', action: () => navigate('/admin') }
+        }
+      });
+    }
+
+    return fencesList;
+  }, [stats, invoices, devisList, tickets, user, navigate]);
+
+  // Composant pour rendre une fence (section)
+  const renderFence = (fence: Fence) => {
+    const colors = fenceColors[fence.color];
+    
+    return (
+      <motion.div
+        key={fence.id}
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3 }}
+        className="group"
+      >
+        <Card className="h-full border-0 shadow-sm hover:shadow-lg transition-all duration-300 hover:scale-[1.01] bg-white/80 backdrop-blur-sm">
+          <CardHeader className="pb-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className={cn("p-2.5 rounded-xl", colors.bg, colors.border, "border")}>
+                  <fence.icon className={cn("h-5 w-5", colors.icon)} />
+                </div>
+                <div>
+                  <CardTitle className="text-lg font-semibold">{fence.title}</CardTitle>
+                  {fence.description && (
+                    <p className="text-sm text-muted-foreground mt-1">{fence.description}</p>
+                  )}
+                </div>
+              </div>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                className="opacity-0 group-hover:opacity-100 transition-opacity h-8 w-8 p-0"
+                onClick={fence.actions?.primary.action}
+              >
+                <ArrowUpRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <div className="space-y-2">
+              {fence.items.map((item, index) => (
+                <motion.div 
+                  key={item.id}
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.2, delay: index * 0.05 }}
+                  className={cn(
+                    "flex items-center justify-between p-3 rounded-lg transition-all duration-200",
+                    "bg-muted/20 hover:bg-muted/40",
+                    item.action && "cursor-pointer"
+                  )}
+                  onClick={item.action}
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="font-medium text-sm truncate">{item.title}</p>
+                      {item.status && (
+                        <div className={cn(
+                          "w-2 h-2 rounded-full flex-shrink-0",
+                          item.status === 'success' && "bg-green-500",
+                          item.status === 'warning' && "bg-yellow-500",
+                          item.status === 'error' && "bg-red-500",
+                          item.status === 'info' && "bg-blue-500"
+                        )} />
+                      )}
+                    </div>
+                    {item.subtitle && (
+                      <p className="text-xs text-muted-foreground truncate">{item.subtitle}</p>
+                    )}
+                    {item.date && (
+                      <p className="text-xs text-muted-foreground">{item.date}</p>
+                    )}
+                  </div>
+                  <div className="text-right flex-shrink-0 ml-3">
+                    <p className="font-semibold text-sm">{item.amount || item.value}</p>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+            {fence.actions && (
+              <div className="flex gap-2 mt-4 pt-3 border-t border-border/40">
+                <Button 
+                  onClick={fence.actions.primary.action}
+                  size="sm" 
+                  className="flex-1"
+                >
+                  {fence.actions.primary.label}
+                </Button>
+                {fence.actions.secondary && (
+                  <Button 
+                    onClick={fence.actions.secondary.action}
+                    variant="outline" 
+                    size="sm"
+                    className="flex-1"
+                  >
+                    {fence.actions.secondary.label}
+                  </Button>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </motion.div>
+    );
+  };
+
+  // Gestion du mode hors ligne
+  if (isOffline) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-6">
+        <div className="max-w-4xl mx-auto">
+          <Card className="border-yellow-200 bg-yellow-50">
+            <CardContent className="p-8 text-center">
+              <WifiOff className="h-12 w-12 text-yellow-500 mx-auto mb-4" />
+              <h2 className="text-xl font-bold text-yellow-700 mb-2">Mode Hors-ligne</h2>
+              <p className="text-yellow-600 mb-4">
+                Vous n'êtes pas connecté à Internet. Certaines fonctionnalités peuvent ne pas être disponibles.
+              </p>
+              <Button onClick={loadDashboardData} variant="outline" className="bg-white hover:bg-slate-50">
+                <RefreshCw className="h-4 w-4 mr-2" /> Réessayer
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
+      <div className="p-6">
+        <div className="max-w-7xl mx-auto">
+          {/* Header */}
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8">
+            <div>
+              <h1 className="text-3xl font-bold bg-gradient-to-r from-slate-900 to-slate-600 bg-clip-text text-transparent">
+                Tableau de bord
+              </h1>
+              <p className="text-slate-600 mt-1">
+                Bienvenue, {user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() : 'Utilisateur'}
+              </p>
+            </div>
+            
+            <div className="flex items-center gap-3">
+              <Button 
+                onClick={loadDashboardData}
+                variant="outline"
+                size="sm"
+                disabled={loading}
+                className="bg-white/80 backdrop-blur-sm"
+              >
+                <RefreshCw className={cn("h-4 w-4 mr-2", loading && "animate-spin")} />
+                Actualiser
+              </Button>
+            </div>
+          </div>
+
+          {/* Contenu principal */}
+          <AnimatePresence mode="wait">
+            {loading ? (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="flex items-center justify-center py-20"
+              >
+                <div className="flex flex-col items-center gap-4">
+                  <RefreshCw className="h-8 w-8 animate-spin text-blue-500" />
+                  <p className="text-muted-foreground">Chargement des données...</p>
+                </div>
+              </motion.div>
+            ) : (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+              >
+                {/* Grille de fences iOS */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+                  {fences.map((fence, index) => (
+                    <motion.div
+                      key={fence.id}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.3, delay: index * 0.1 }}
+                    >
+                      {renderFence(fence)}
+                    </motion.div>
+                  ))}
+                </div>
+
+                {/* Indicateur IA en bas */}
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3, delay: 0.5 }}
+                  className="mt-8"
+                >
+                  <Card className="border-0 shadow-sm bg-gradient-to-r from-blue-50 to-purple-50 backdrop-blur-sm">
+                    <CardContent className="p-4">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 rounded-lg bg-gradient-to-r from-blue-500 to-purple-600">
+                          <Brain className="h-4 w-4 text-white" />
+                        </div>
+                        <div className="flex-1">
+                          <p className="text-sm font-medium">Intelligence Artificielle</p>
+                          <p className="text-xs text-muted-foreground">
+                            Analyse prédictive activée • Suggestions optimisées
+                          </p>
+                        </div>
+                        <Badge variant="secondary" className="bg-white/60">
+                          <Zap className="h-3 w-3 mr-1" />
+                          Actif
+                        </Badge>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default Dashboard;
+        });
+        
+        setLoading(false);
+        Diagnostics.log('Dashboard', 'Données chargées avec succès');
+      }
+    } catch (error) {
+      if (isMounted.current) {
+        setLoadError('Erreur de chargement');
+        setLoading(false);
+        
+        // Ajouter des données par défaut pour éviter l'affichage vide
+        setDevisList([]);
+        setInvoices([]);
+        setTickets([]);
+        setCompaniesCount(0);
+        setUsersCount(0);
+        
+        errorReporter.captureException(error, {
+          component: 'Dashboard',
+          action: 'loadDashboardData'
+        });
+      }
+    }
+  }, [isOffline, user?.role, user?.companyId]);
+
+  // Stats préparés avec useMemo pour éviter les recalculs inutiles
+  const stats = useMemo(() => {
+    const totalAmount = invoices.reduce((sum, invoice) => sum + parseFloat(invoice.amount.toString()), 0);
+    const overdueAmount = invoices
+      .filter(inv => inv.status === 'late' || inv.status === 'overdue')
+      .reduce((sum, invoice) => sum + parseFloat(invoice.amount.toString()), 0);
+    const pendingAmount = devisList
+      .filter(devis => devis.status === 'sent' || devis.status === 'pending')
+      .reduce((sum, devis) => sum + parseFloat(devis.amount.toString()), 0);
+    
+    // Récupérer les statistiques de tickets
+    const openTickets = tickets.filter(t => t.status === 'open' || t.status === 'pending_client_response' || t.status === 'pending_admin_response' || t.status === 'in_progress').length;
+    
+    return {
+      invoicesCount: invoices.length,
+      totalAmount,
+      pendingAmount,
+      overdueAmount,
+      devisCount: devisList.length,
+      openTickets,
+      companiesCount,
+      usersCount
+    };
+  }, [invoices, devisList, tickets, companiesCount, usersCount]);
+
+  // Créer les sections du Dashboard style iOS/Kanban
+  const dashboardSections = useMemo((): DashboardSection[] => {
+    const sections: DashboardSection[] = [
+      {
+        id: 'revenue',
+        title: 'Chiffre d\'affaires',
+        description: `${formatCurrencyLocal(stats.totalAmount)} au total`,
+        icon: DollarSign,
+        color: 'emerald',
+        items: [
+          { label: 'Facturé', value: formatCurrencyLocal(stats.totalAmount), status: 'success' },
+          { label: 'En attente', value: formatCurrencyLocal(stats.pendingAmount), status: 'warning' },
+          { label: 'En retard', value: formatCurrencyLocal(stats.overdueAmount), status: 'error' }
+        ],
+        actions: {
+          primary: { label: 'Voir rapports', action: () => navigate('/admin/rapports') }
+        }
+      },
+      {
+        id: 'invoices',
+        title: 'Factures',
+        description: `${stats.invoicesCount} factures`,
+        icon: FileText,
+        color: 'blue',
+        items: invoices.slice(0, 3).map(invoice => ({
+          id: invoice.id,
+          title: `Facture ${invoice.number}`,
+          subtitle: invoice.companyName,
+          amount: formatCurrencyLocal(parseFloat(invoice.amount.toString())),
+          status: invoice.status === 'paid' ? 'success' : invoice.status === 'late' ? 'error' : 'warning',
+          date: formatDate(new Date(invoice.createdAt))
+        })),
+        actions: {
+          primary: { label: 'Gérer factures', action: () => navigate(user?.role === 'admin' ? '/admin/factures' : '/factures') },
+          secondary: { label: 'Nouvelle facture', action: () => navigate('/factures/new') }
+        }
+      },
+      {
+        id: 'quotes',
+        title: 'Devis',
+        description: `${stats.devisCount} devis`,
+        icon: ClipboardList,
+        color: 'amber',
+        items: devisList.slice(0, 3).map(devis => ({
+          id: devis.id,
+          title: `Devis ${devis.number}`,
+          subtitle: devis.companyName,
+          amount: formatCurrencyLocal(parseFloat(devis.amount.toString())),
+          status: devis.status === 'approved' ? 'success' : devis.status === 'rejected' ? 'error' : 'warning',
+          date: formatDate(new Date(devis.createdAt))
+        })),
+        actions: {
+          primary: { label: 'Gérer devis', action: () => navigate(user?.role === 'admin' ? '/admin/devis' : '/devis') },
+          secondary: { label: 'Nouveau devis', action: () => navigate('/devis/new') }
+        }
+      },
+      {
+        id: 'support',
+        title: 'Support',
+        description: `${stats.openTickets} tickets ouverts`,
+        icon: MessageSquare,
+        color: 'purple',
+        items: tickets.slice(0, 3).map(ticket => ({
+          id: ticket.id,
+          title: ticket.subject || `Ticket #${ticket.number}`,
+          subtitle: ticket.companyName || 'Client',
+          status: ticket.status === 'closed' ? 'success' : ticket.status === 'open' ? 'error' : 'warning',
+          date: formatDate(new Date(ticket.createdAt))
+        })),
+        actions: {
+          primary: { label: 'Voir tickets', action: () => navigate(user?.role === 'admin' ? '/admin/support' : '/support') }
+        }
+      }
+    ];
+
+    // Ajouter les sections admin
+    if (user?.role === 'admin') {
+      sections.push({
+        id: 'management',
+        title: 'Administration',
+        description: `${stats.companiesCount} entreprises, ${stats.usersCount} utilisateurs`,
+        icon: Building,
+        color: 'slate',
+        items: [
+          { label: 'Entreprises', value: stats.companiesCount.toString(), action: () => navigate('/admin/companies') },
+          { label: 'Utilisateurs', value: stats.usersCount.toString(), action: () => navigate('/admin/users') },
+          { label: 'Configurations', value: 'Système', action: () => navigate('/admin/settings') }
+        ],
+        actions: {
+          primary: { label: 'Administration', action: () => navigate('/admin') }
+        }
+      });
+    }
+
+    return sections;
+  }, [stats, invoices, devisList, tickets, user, navigate, formatCurrencyLocal]);
+
+  // Fonction pour le rendu d'une section Kanban
+  const renderDashboardSection = (section: DashboardSection) => {
+    const colorClasses = {
+      emerald: 'bg-emerald-50 border-emerald-200 text-emerald-900',
+      blue: 'bg-blue-50 border-blue-200 text-blue-900',
+      amber: 'bg-amber-50 border-amber-200 text-amber-900',
+      purple: 'bg-purple-50 border-purple-200 text-purple-900',
+      slate: 'bg-slate-50 border-slate-200 text-slate-900'
+    };
+
+    const iconColorClasses = {
+      emerald: 'text-emerald-600',
+      blue: 'text-blue-600',
+      amber: 'text-amber-600',
+      purple: 'text-purple-600',
+      slate: 'text-slate-600'
+    };
+
+    return (
+      <motion.div
+        key={section.id}
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3 }}
+        className="group"
+      >
+        <Card className="h-full border-0 shadow-sm hover:shadow-lg transition-all duration-300 hover:scale-[1.02] bg-white/50 backdrop-blur-sm">
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className={cn(
+                  "p-2.5 rounded-xl",
+                  colorClasses[section.color as keyof typeof colorClasses]
+                )}>
+                  <section.icon className={cn(
+                    "h-5 w-5",
+                    iconColorClasses[section.color as keyof typeof iconColorClasses]
+                  )} />
+                </div>
+                <div>
+                  <CardTitle className="text-lg font-semibold">{section.title}</CardTitle>
+                  {section.description && (
+                    <p className="text-sm text-muted-foreground mt-1">{section.description}</p>
+                  )}
+                </div>
+              </div>
+              <Button variant="ghost" size="sm" className="opacity-0 group-hover:opacity-100 transition-opacity">
+                <ArrowUpRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <div className="space-y-3">
+              {section.items.map((item, index) => (
+                <div 
+                  key={item.id || index}
+                  className="flex items-center justify-between p-3 rounded-lg bg-muted/20 hover:bg-muted/40 transition-colors cursor-pointer"
+                  onClick={item.action}
+                >
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <p className="font-medium text-sm">{item.title || item.label}</p>
+                      {item.status && (
+                        <div className={cn(
+                          "w-2 h-2 rounded-full",
+                          item.status === 'success' && "bg-green-500",
+                          item.status === 'warning' && "bg-yellow-500",
+                          item.status === 'error' && "bg-red-500"
+                        )} />
+                      )}
+                    </div>
+                    {item.subtitle && (
+                      <p className="text-xs text-muted-foreground">{item.subtitle}</p>
+                    )}
+                    {item.date && (
+                      <p className="text-xs text-muted-foreground">{item.date}</p>
+                    )}
+                  </div>
+                  <div className="text-right">
+                    <p className="font-semibold text-sm">{item.amount || item.value}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+            {section.actions && (
+              <div className="flex gap-2 mt-4 pt-3 border-t border-border/40">
+                <Button 
+                  onClick={section.actions.primary.action}
+                  size="sm" 
+                  className="flex-1"
+                >
+                  {section.actions.primary.label}
+                </Button>
+                {section.actions.secondary && (
+                  <Button 
+                    onClick={section.actions.secondary.action}
+                    variant="outline" 
+                    size="sm"
+                    className="flex-1"
+                  >
+                    {section.actions.secondary.label}
+                  </Button>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </motion.div>
+    );
+  };
+
+  if (isOffline) {
+    return (
+      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6 flex flex-col items-center justify-center mb-6">
+        <WifiOff className="h-10 w-10 text-yellow-500 mb-4" />
+        <h2 className="text-xl font-bold text-yellow-700 mb-2">Mode Hors-ligne</h2>
+        <p className="text-yellow-600 text-center mb-4">
+          Vous n'êtes pas connecté à Internet. Certaines fonctionnalités et données peuvent ne pas être disponibles.
+        </p>
+        <Button
+          variant="outline"
+          onClick={loadDashboardData}
+          className="bg-white hover:bg-slate-50"
+        >
+          <RefreshCw className="h-4 w-4 mr-2" /> Réessayer
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold text-slate-900">Tableau de bord</h1>
+          <p className="text-slate-600 mt-1">Bienvenue, {user ? `${user.firstName || ''} ${user.lastName || ''}` : 'Utilisateur'}</p>
+        </div>
+        
+        <TooltipProvider>
+          <div className="flex items-center bg-muted/40 rounded-lg p-1 border shadow-sm">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button 
+                  variant={viewMode === 'cards' ? "secondary" : "ghost"} 
+                  size="sm" 
+                  onClick={() => setViewMode('cards')} 
+                  className="px-3"
+                >
+                  <LayoutGrid className="h-4 w-4 mr-1" />
+                  <span className="sr-only sm:not-sr-only sm:inline-block">Cartes</span>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Vue en cartes</p>
+              </TooltipContent>
+            </Tooltip>
+            
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button 
+                  variant={viewMode === 'list' ? "secondary" : "ghost"} 
+                  size="sm" 
+                  onClick={() => setViewMode('list')} 
+                  className="px-3"
+                >
+                  <List className="h-4 w-4 mr-1" />
+                  <span className="sr-only sm:not-sr-only sm:inline-block">Liste</span>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Vue en liste</p>
+              </TooltipContent>
+            </Tooltip>
+            
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button 
+                  variant="ghost"
+                  size="sm"
+                  onClick={loadDashboardData}
+                  className="px-2 ml-1"
+                  disabled={loading}
+                >
+                  <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Rafraîchir les données</p>
+              </TooltipContent>
+            </Tooltip>
+          </div>
+        </TooltipProvider>
+      </div>
+      
+      <AnimatePresence mode="wait" initial={false}>
+        {loading ? (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="flex items-center justify-center py-20"
+          >
+            <div className="flex flex-col items-center gap-4">
+              <RefreshCw className="h-8 w-8 animate-spin text-blue-500" />
+              <p className="text-muted-foreground">Chargement des données...</p>
+            </div>
+          </motion.div>
+        ) : (
+        <motion.div
+          key={viewMode}
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -20 }}
+          transition={{ 
+            duration: 0.5, 
+            ease: [0.22, 1, 0.36, 1],
+            opacity: { duration: 0.4 },
+            y: { type: "spring", stiffness: 100, damping: 15 }
+          }}
+        >
+          {viewMode === 'cards' && (
+            <div className="space-y-8">
+              {/* Vue en cartes épurées - Style Notion moderne */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                {dashboardItems.map((item, index) => (
+                  <motion.div
+                    key={item.id}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.3, delay: index * 0.1 }}
+                    onClick={item.onClick}
+                    className="group cursor-pointer"
+                  >
+                    <Card className="h-full border-0 shadow-sm hover:shadow-md transition-all duration-200 hover:scale-[1.02] bg-white/50 backdrop-blur-sm">
+                      <CardContent className="p-6">
+                        <div className="flex items-center justify-between mb-4">
+                          <div className={cn(
+                            "p-2 rounded-lg",
+                            item.color === 'blue' && "bg-blue-50 text-blue-600",
+                            item.color === 'green' && "bg-green-50 text-green-600",
+                            item.color === 'yellow' && "bg-yellow-50 text-yellow-600",
+                            item.color === 'red' && "bg-red-50 text-red-600",
+                            item.color === 'purple' && "bg-purple-50 text-purple-600",
+                            item.color === 'default' && "bg-gray-50 text-gray-600",
+                          )}>
+                            <item.icon className="h-5 w-5" />
+                          </div>
+                          <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <h3 className="font-medium text-sm text-muted-foreground">{item.title}</h3>
+                          <p className="text-2xl font-bold tracking-tight">{item.value}</p>
+                          {item.description && (
+                            <p className="text-xs text-muted-foreground">{item.description}</p>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </motion.div>
+                ))}
+              </div>
+              
+              {/* Section activités récentes épurée */}
+              <div className="mt-8">
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-xl font-semibold tracking-tight">Activité récente</h2>
+                  <Button variant="ghost" size="sm" className="text-muted-foreground">
+                    Voir tout
+                  </Button>
+                </div>
+                <Card className="border-0 shadow-sm bg-white/50 backdrop-blur-sm">
+                  <CardContent className="p-0">
+                    {recentActivities.length === 0 ? (
+                      <div className="p-8 text-center">
+                        <div className="w-12 h-12 rounded-full bg-muted/20 flex items-center justify-center mx-auto mb-4">
+                          <ClipboardList className="h-6 w-6 text-muted-foreground" />
+                        </div>
+                        <p className="text-muted-foreground">Aucune activité récente</p>
+                      </div>
+                    ) : (
+                      recentActivities.slice(0, 5).map((activity, index) => (
+                        <div 
+                          key={activity.id} 
+                          className={cn(
+                            "flex items-center gap-4 p-4 hover:bg-muted/20 transition-colors",
+                            index !== recentActivities.slice(0, 5).length - 1 && "border-b border-border/40"
+                          )}
+                        >
+                          <div className={cn(
+                            "p-2 rounded-lg shrink-0",
+                            activity.type === 'invoice' && "bg-blue-50 text-blue-600",
+                            activity.type === 'quote' && "bg-yellow-50 text-yellow-600",
+                            activity.type === 'ticket' && "bg-green-50 text-green-600"
+                          )}>
+                            {activity.type === 'invoice' && <FileText className="h-4 w-4" />}
+                            {activity.type === 'quote' && <ClipboardList className="h-4 w-4" />}
+                            {activity.type === 'ticket' && <MessageSquare className="h-4 w-4" />}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium truncate">{activity.title}</p>
+                            <p className="text-sm text-muted-foreground truncate">{activity.description}</p>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              {formatDate(new Date(activity.date))}
+                            </p>
+                          </div>
+                          {activity.status && (
+                            <Badge 
+                              variant="secondary"
+                              className={cn(
+                                "text-xs",
+                                activity.status === 'completed' && "bg-green-50 text-green-700",
+                                activity.status === 'pending' && "bg-yellow-50 text-yellow-700",
+                                activity.status === 'failed' && "bg-red-50 text-red-700"
+                              )}
+                            >
+                              {activity.status}
+                            </Badge>
+                          )}
+                        </div>
+                      ))
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+            </div>
+          )}
+
+          {viewMode === 'list' && (
+            <div className="space-y-6">
+              {/* Vue en liste alternative */}
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                {dashboardItems.map((item) => (
+                  <motion.div
+                    key={item.id}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.3 }}
+                    onClick={item.onClick}
+                    className={cn(
+                      "flex items-center gap-4 p-4 rounded-lg border hover:shadow-sm transition-all", 
+                      item.onClick && "cursor-pointer"
+                    )}
+                  >
+                    <div className={cn(
+                      "p-2 rounded-full",
+                      item.color === 'blue' && "bg-blue-100",
+                      item.color === 'green' && "bg-green-100",
+                      item.color === 'yellow' && "bg-yellow-100",
+                      item.color === 'red' && "bg-red-100",
+                      item.color === 'purple' && "bg-purple-100",
+                      item.color === 'default' && "bg-slate-100",
+                    )}>
+                      <item.icon className={cn(
+                        "h-5 w-5",
+                        item.color === 'blue' && "text-blue-600",
+                        item.color === 'green' && "text-green-600",
+                        item.color === 'yellow' && "text-yellow-600",
+                        item.color === 'red' && "text-red-600",
+                        item.color === 'purple' && "text-purple-600",
+                        item.color === 'default' && "text-slate-600",
+                      )} />
+                    </div>
+                    <div>
+                      <h3 className="font-medium text-sm text-muted-foreground">{item.title}</h3>
+                      <p className="text-xl font-bold">{item.value}</p>
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+              
+              <div className="mt-6">
+                <h2 className="text-xl font-semibold mb-4">Activités récentes</h2>
+                <div className="divide-y rounded-lg border">
+                  {recentActivities.length === 0 ? (
+                    <div className="p-6 text-center text-muted-foreground">
+                      Aucune activité récente à afficher
+                    </div>
+                  ) : (
+                    recentActivities.map((activity) => (
+                      <div key={activity.id} className="flex items-start justify-between p-4 hover:bg-slate-50">
+                        <div className="flex items-start gap-3">
+                          <div className="mt-1">
+                            {activity.type === 'invoice' && <FileText className="h-5 w-5 text-blue-500" />}
+                            {activity.type === 'quote' && <ClipboardList className="h-5 w-5 text-yellow-500" />}
+                            {activity.type === 'ticket' && <MessageSquare className="h-5 w-5 text-green-500" />}
+                          </div>
+                          <div>
+                            <h4 className="font-medium">{activity.title}</h4>
+                            <p className="text-sm text-muted-foreground">{activity.description}</p>
+                            <p className="text-xs mt-1">{formatDate(new Date(activity.date))}</p>
+                          </div>
+                        </div>
+                        {activity.status && (
+                          <Badge 
+                            className={cn(
+                              "text-xs",
+                              activity.status === 'completed' && "bg-green-100 text-green-800",
+                              activity.status === 'pending' && "bg-yellow-100 text-yellow-800",
+                              activity.status === 'failed' && "bg-red-100 text-red-800"
+                            )}
+                          >
+                            {activity.status}
+                          </Badge>
+                        )}
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+        </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};
+
+export default Dashboard;

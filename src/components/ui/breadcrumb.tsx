@@ -3,6 +3,7 @@ import { Slot } from "@radix-ui/react-slot"
 import { ChevronRight, MoreHorizontal } from "lucide-react"
 
 import { cn } from "@/lib/utils"
+import { ensureSingleElement } from "@/lib/react-children-utils.tsx"
 
 const Breadcrumb = React.forwardRef<
   HTMLElement,
@@ -44,15 +45,17 @@ const BreadcrumbLink = React.forwardRef<
   React.ComponentPropsWithoutRef<"a"> & {
     asChild?: boolean
   }
->(({ asChild, className, ...props }, ref) => {
+>(({ asChild, className, children, ...props }, ref) => {
   const Comp = asChild ? Slot : "a"
-
+  const safeChildren = asChild ? ensureSingleElement(children) : children
   return (
     <Comp
       ref={ref}
       className={cn("transition-colors hover:text-foreground", className)}
       {...props}
-    />
+    >
+      {safeChildren}
+    </Comp>
   )
 })
 BreadcrumbLink.displayName = "BreadcrumbLink"

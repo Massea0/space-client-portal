@@ -1,0 +1,6 @@
+// src/lib/supabaseClient.js - Version robuste avec gestion d'erreurs
+
+import { robustSupabase } from './robustSupabaseClient';
+
+// Exportation du client Supabase robuste
+export const supabase = robustSupabase;

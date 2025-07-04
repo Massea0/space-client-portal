@@ -1,0 +1,783 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Checklist Interactive - Composants UI Twenty-Inspired</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            line-height: 1.6;
+            color: #374151;
+            background: #f9fafb;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+            color: white;
+            padding: 32px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+        
+        .header p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+        
+        .progress-overview {
+            padding: 24px 32px;
+            background: #f8fafc;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        
+        .progress-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+        
+        .progress-card {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid #e5e7eb;
+            text-align: center;
+        }
+        
+        .progress-card h3 {
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: #6b7280;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        
+        .progress-number {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #1f2937;
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #e5e7eb;
+            border-radius: 4px;
+            overflow: hidden;
+            margin: 16px 0;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #10b981, #059669);
+            border-radius: 4px;
+            transition: width 0.3s ease;
+        }
+        
+        .content {
+            padding: 32px;
+        }
+        
+        .phase {
+            margin-bottom: 48px;
+        }
+        
+        .phase-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 24px;
+            padding-bottom: 16px;
+            border-bottom: 2px solid #e5e7eb;
+        }
+        
+        .phase-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            margin-right: 16px;
+        }
+        
+        .phase-1 .phase-icon { background: #fef3c7; }
+        .phase-2 .phase-icon { background: #dbeafe; }
+        .phase-3 .phase-icon { background: #d1fae5; }
+        .phase-4 .phase-icon { background: #fce7f3; }
+        .phase-5 .phase-icon { background: #f3e8ff; }
+        
+        .phase-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: #1f2937;
+        }
+        
+        .component {
+            margin-bottom: 32px;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        
+        .component-header {
+            background: #f8fafc;
+            padding: 16px 20px;
+            border-bottom: 1px solid #e5e7eb;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            cursor: pointer;
+        }
+        
+        .component-title {
+            font-size: 1.125rem;
+            font-weight: 600;
+            color: #1f2937;
+        }
+        
+        .component-status {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        
+        .status-pending {
+            background: #fef3c7;
+            color: #92400e;
+        }
+        
+        .status-progress {
+            background: #dbeafe;
+            color: #1e40af;
+        }
+        
+        .status-complete {
+            background: #d1fae5;
+            color: #065f46;
+        }
+        
+        .component-body {
+            padding: 20px;
+            display: none;
+        }
+        
+        .component-body.active {
+            display: block;
+        }
+        
+        .checklist {
+            list-style: none;
+        }
+        
+        .checklist li {
+            display: flex;
+            align-items: flex-start;
+            margin-bottom: 12px;
+            padding: 8px 0;
+        }
+        
+        .checklist input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            margin-right: 12px;
+            margin-top: 2px;
+            accent-color: #3b82f6;
+        }
+        
+        .checklist label {
+            flex: 1;
+            font-size: 0.875rem;
+            color: #4b5563;
+            cursor: pointer;
+        }
+        
+        .checklist li.completed label {
+            text-decoration: line-through;
+            color: #9ca3af;
+        }
+        
+        .file-path {
+            background: #f3f4f6;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.75rem;
+            color: #6b7280;
+            margin-bottom: 16px;
+        }
+        
+        .priority-high { border-left: 4px solid #ef4444; }
+        .priority-medium { border-left: 4px solid #f59e0b; }
+        .priority-low { border-left: 4px solid #10b981; }
+        
+        .controls {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            display: flex;
+            gap: 12px;
+        }
+        
+        .btn {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 12px 16px;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        
+        .btn:hover {
+            background: #2563eb;
+        }
+        
+        .btn-secondary {
+            background: #6b7280;
+        }
+        
+        .btn-secondary:hover {
+            background: #4b5563;
+        }
+        
+        @media (max-width: 768px) {
+            .container {
+                margin: 10px;
+                border-radius: 8px;
+            }
+            
+            .header {
+                padding: 24px 20px;
+            }
+            
+            .header h1 {
+                font-size: 2rem;
+            }
+            
+            .content {
+                padding: 20px;
+            }
+            
+            .progress-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚀 Composants UI Twenty-Inspired</h1>
+            <p>Checklist Interactive - Arcadis Enterprise OS</p>
+        </div>
+        
+        <div class="progress-overview">
+            <div class="progress-grid">
+                <div class="progress-card">
+                    <h3>Progression Globale</h3>
+                    <div class="progress-number" id="global-progress">0%</div>
+                </div>
+                <div class="progress-card">
+                    <h3>Composants Terminés</h3>
+                    <div class="progress-number" id="completed-components">0/11</div>
+                </div>
+                <div class="progress-card">
+                    <h3>Tâches Complétées</h3>
+                    <div class="progress-number" id="completed-tasks">0/127</div>
+                </div>
+                <div class="progress-card">
+                    <h3>Sprint Actuel</h3>
+                    <div class="progress-number">Sprint 1</div>
+                </div>
+            </div>
+            <div class="progress-bar">
+                <div class="progress-fill" id="main-progress-fill" style="width: 0%"></div>
+            </div>
+        </div>
+        
+        <div class="content">
+            <!-- Phase 1: Composants de Base -->
+            <div class="phase phase-1">
+                <div class="phase-header">
+                    <div class="phase-icon">🔥</div>
+                    <div class="phase-title">Phase 1 : Composants de Base Avancés</div>
+                </div>
+                
+                <div class="component priority-high" data-component="select">
+                    <div class="component-header" onclick="toggleComponent('select')">
+                        <div class="component-title">Select/Dropdown Component</div>
+                        <div class="component-status status-pending">En Attente</div>
+                    </div>
+                    <div class="component-body" id="select-body">
+                        <div class="file-path">📁 src/components/ui/select.tsx</div>
+                        <ul class="checklist" data-component="select">
+                            <li><input type="checkbox" id="select-1"><label for="select-1">Architecture basée sur Radix UI Select primitive</label></li>
+                            <li><input type="checkbox" id="select-2"><label for="select-2">Styling cohérent avec Twenty (rounded-lg, shadows subtiles)</label></li>
+                            <li><input type="checkbox" id="select-3"><label for="select-3">Variants: default, error, success, warning</label></li>
+                            <li><input type="checkbox" id="select-4"><label for="select-4">Tailles: sm (32px), default (40px), lg (48px)</label></li>
+                            <li><input type="checkbox" id="select-5"><label for="select-5">États: hover, focus, disabled, loading</label></li>
+                            <li><input type="checkbox" id="select-6"><label for="select-6">Recherche intégrée avec highlighting des résultats</label></li>
+                            <li><input type="checkbox" id="select-7"><label for="select-7">Multi-sélection avec badges/chips removables</label></li>
+                            <li><input type="checkbox" id="select-8"><label for="select-8">Groupement d'options avec headers visuels</label></li>
+                            <li><input type="checkbox" id="select-9"><label for="select-9">Support d'icônes personnalisées par option</label></li>
+                            <li><input type="checkbox" id="select-10"><label for="select-10">Navigation clavier complète (arrows, enter, escape)</label></li>
+                            <li><input type="checkbox" id="select-11"><label for="select-11">Animations ouverture/fermeture fluide (300ms ease-out)</label></li>
+                            <li><input type="checkbox" id="select-12"><label for="select-12">Accessibilité ARIA + focus management + screen reader</label></li>
+                            <li><input type="checkbox" id="select-13"><label for="select-13">Tests unitaires + intégration + accessibilité</label></li>
+                        </ul>
+                    </div>
+                </div>
+                
+                <div class="component priority-high" data-component="checkbox">
+                    <div class="component-header" onclick="toggleComponent('checkbox')">
+                        <div class="component-title">Checkbox/Radio Components</div>
+                        <div class="component-status status-pending">En Attente</div>
+                    </div>
+                    <div class="component-body" id="checkbox-body">
+                        <div class="file-path">📁 src/components/ui/checkbox.tsx | radio.tsx</div>
+                        <ul class="checklist" data-component="checkbox">
+                            <li><input type="checkbox" id="checkbox-1"><label for="checkbox-1">Structure HTML sémantique avec labels associés</label></li>
+                            <li><input type="checkbox" id="checkbox-2"><label for="checkbox-2">Style Twenty avec border radius et transitions</label></li>
+                            <li><input type="checkbox" id="checkbox-3"><label for="checkbox-3">Animation de check smooth (scale + opacity)</label></li>
+                            <li><input type="checkbox" id="checkbox-4"><label for="checkbox-4">État indéterminé pour checkbox (trait horizontal)</label></li>
+                            <li><input type="checkbox" id="checkbox-5"><label for="checkbox-5">Groupes avec layout responsive et proper spacing</label></li>
+                            <li><input type="checkbox" id="checkbox-6"><label for="checkbox-6">Variants: primary, success, warning, error (couleurs sémantiques)</label></li>
+                            <li><input type="checkbox" id="checkbox-7"><label for="checkbox-7">Tailles: sm (16px), default (20px), lg (24px)</label></li>
+                            <li><input type="checkbox" id="checkbox-8"><label for="checkbox-8">Focus ring accessible selon standards WCAG</label></li>
+                            <li><input type="checkbox" id="checkbox-9"><label for="checkbox-9">Disabled state avec apparence grisée + cursor not-allowed</label></li>
+                            <li><input type="checkbox" id="checkbox-10"><label for="checkbox-10">Tests coverage complète + tests visuels</label></li>
+                        </ul>
+                    </div>
+                </div>
+                
+                <div class="component priority-high" data-component="title-input">
+                    <div class="component-header" onclick="toggleComponent('title-input')">
+                        <div class="component-title">TitleInput Component</div>
+                        <div class="component-status status-pending">En Attente</div>
+                    </div>
+                    <div class="component-body" id="title-input-body">
+                        <div class="file-path">📁 src/components/ui/title-input.tsx</div>
+                        <ul class="checklist" data-component="title-input">
+                            <li><input type="checkbox" id="title-input-1"><label for="title-input-1">Input inline éditable pour panneaux latéraux</label></li>
+                            <li><input type="checkbox" id="title-input-2"><label for="title-input-2">Auto-focus automatique à l'activation</label></li>
+                            <li><input type="checkbox" id="title-input-3"><label for="title-input-3">Auto-resize hauteur selon contenu (min/max)</label></li>
+                            <li><input type="checkbox" id="title-input-4"><label for="title-input-4">Validation temps réel avec feedback visuel</label></li>
+                            <li><input type="checkbox" id="title-input-5"><label for="title-input-5">Placeholder intelligent selon contexte</label></li>
+                            <li><input type="checkbox" id="title-input-6"><label for="title-input-6">Raccourcis Escape (annuler), Enter (valider)</label></li>
+                            <li><input type="checkbox" id="title-input-7"><label for="title-input-7">Animation transition smooth entre modes vue/édition</label></li>
+                            <li><input type="checkbox" id="title-input-8"><label for="title-input-8">Styling discret qui s'intègre naturellement</label></li>
+                            <li><input type="checkbox" id="title-input-9"><label for="title-input-9">Tests d'intégration avec workflows utilisateur</label></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Phase 2: Composants de Données -->
+            <div class="phase phase-2">
+                <div class="phase-header">
+                    <div class="phase-icon">📊</div>
+                    <div class="phase-title">Phase 2 : Composants de Données</div>
+                </div>
+                
+                <div class="component priority-high" data-component="table">
+                    <div class="component-header" onclick="toggleComponent('table')">
+                        <div class="component-title">Table Component Avancé</div>
+                        <div class="component-status status-pending">En Attente</div>
+                    </div>
+                    <div class="component-body" id="table-body">
+                        <div class="file-path">📁 src/components/ui/table.tsx</div>
+                        <ul class="checklist" data-component="table">
+                            <li><input type="checkbox" id="table-1"><label for="table-1">Structure Table HTML sémantique responsive</label></li>
+                            <li><input type="checkbox" id="table-2"><label for="table-2">Headers fixes avec sticky + scroll horizontal</label></li>
+                            <li><input type="checkbox" id="table-3"><label for="table-3">Tri colonnes triables avec indicateurs visuels (↑↓)</label></li>
+                            <li><input type="checkbox" id="table-4"><label for="table-4">Pagination composant intégré avec navigation</label></li>
+                            <li><input type="checkbox" id="table-5"><label for="table-5">Filtres par colonnes avec UI moderne (dropdowns, inputs)</label></li>
+                            <li><input type="checkbox" id="table-6"><label for="table-6">Sélection multiple avec checkboxes + select all</label></li>
+                            <li><input type="checkbox" id="table-7"><label for="table-7">Actions masse - toolbar avec actions contextuelles</label></li>
+                            <li><input type="checkbox" id="table-8"><label for="table-8">Redimensionnement colonnes ajustables par drag</label></li>
+                            <li><input type="checkbox" id="table-9"><label for="table-9">Export fonctionnalités CSV, JSON avec UI</label></li>
+                            <li><input type="checkbox" id="table-10"><label for="table-10">États vides illustrations + messages + call-to-actions</label></li>
+                            <li><input type="checkbox" id="table-11"><label for="table-11">Loading skeleton loading pour chaque ligne</label></li>
+                            <li><input type="checkbox" id="table-12"><label for="table-12">Mobile design responsive avec cards sur petits écrans</label></li>
+                            <li><input type="checkbox" id="table-13"><label for="table-13">Performance virtualisation pour grandes datasets</label></li>
+                            <li><input type="checkbox" id="table-14"><label for="table-14">Tests performance + UX + accessibilité</label></li>
+                        </ul>
+                    </div>
+                </div>
+                
+                <div class="component priority-high" data-component="kanban">
+                    <div class="component-header" onclick="toggleComponent('kanban')">
+                        <div class="component-title">Kanban Board Component</div>
+                        <div class="component-status status-pending">En Attente</div>
+                    </div>
+                    <div class="component-body" id="kanban-body">
+                        <div class="file-path">📁 src/components/ui/kanban.tsx</div>
+                        <ul class="checklist" data-component="kanban">
+                            <li><input type="checkbox" id="kanban-1"><label for="kanban-1">Layout colonnes scrollables horizontalement</label></li>
+                            <li><input type="checkbox" id="kanban-2"><label for="kanban-2">Drag & Drop react-beautiful-dnd avec animations fluides</label></li>
+                            <li><input type="checkbox" id="kanban-3"><label for="kanban-3">Cartes design modulaire et personnalisable</label></li>
+                            <li><input type="checkbox" id="kanban-4"><label for="kanban-4">Animations déplacements smooth + feedback visuel</label></li>
+                            <li><input type="checkbox" id="kanban-5"><label for="kanban-5">Filtres recherche + filtres par statut/assigné</label></li>
+                            <li><input type="checkbox" id="kanban-6"><label for="kanban-6">Actions menu contextuel par carte (éditer, supprimer)</label></li>
+                            <li><input type="checkbox" id="kanban-7"><label for="kanban-7">WIP Limits limites visuelles par colonne</label></li>
+                            <li><input type="checkbox" id="kanban-8"><label for="kanban-8">Touch Support fonctionnalités mobile/tablet optimisées</label></li>
+                            <li><input type="checkbox" id="kanban-9"><label for="kanban-9">Responsive adaptation layout selon taille écran</label></li>
+                            <li><input type="checkbox" id="kanban-10"><label for="kanban-10">Tests interaction drag & drop + états</label></li>
+                        </ul>
+                    </div>
+                </div>
+                
+                <div class="component priority-high" data-component="data-view">
+                    <div class="component-header" onclick="toggleComponent('data-view')">
+                        <div class="component-title">DataView Component</div>
+                        <div class="component-status status-pending">En Attente</div>
+                    </div>
+                    <div class="component-body" id="data-view-body">
+                        <div class="file-path">📁 src/components/ui/data-view.tsx</div>
+                        <ul class="checklist" data-component="data-view">
+                            <li><input type="checkbox" id="data-view-1"><label for="data-view-1">Modes basculement Table/Kanban/Grid avec persistance</label></li>
+                            <li><input type="checkbox" id="data-view-2"><label for="data-view-2">Préférences sauvegarde configuration utilisateur</label></li>
+                            <li><input type="checkbox" id="data-view-3"><label for="data-view-3">Filtres interface unifiée pour tous les modes</label></li>
+                            <li><input type="checkbox" id="data-view-4"><label for="data-view-4">Recherche globale avec highlighting + suggestions</label></li>
+                            <li><input type="checkbox" id="data-view-5"><label for="data-view-5">Pagination intelligente selon le mode d'affichage</label></li>
+                            <li><input type="checkbox" id="data-view-6"><label for="data-view-6">États loading harmonisé entre tous les modes</label></li>
+                            <li><input type="checkbox" id="data-view-7"><label for="data-view-7">Export fonctionnalités communes tous modes</label></li>
+                            <li><input type="checkbox" id="data-view-8"><label for="data-view-8">Tests cohérence entre modes + performance</label></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Phase 3: Layout -->
+            <div class="phase phase-3">
+                <div class="phase-header">
+                    <div class="phase-icon">🏗️</div>
+                    <div class="phase-title">Phase 3 : Composants de Layout</div>
+                </div>
+                
+                <div class="component priority-medium" data-component="modal">
+                    <div class="component-header" onclick="toggleComponent('modal')">
+                        <div class="component-title">Modal/Dialog Component</div>
+                        <div class="component-status status-pending">En Attente</div>
+                    </div>
+                    <div class="component-body" id="modal-body">
+                        <div class="file-path">📁 src/components/ui/modal.tsx</div>
+                        <ul class="checklist" data-component="modal">
+                            <li><input type="checkbox" id="modal-1"><label for="modal-1">Overlay backdrop avec blur effect subtil</label></li>
+                            <li><input type="checkbox" id="modal-2"><label for="modal-2">Animations entrée/sortie élégantes (scale + fade)</label></li>
+                            <li><input type="checkbox" id="modal-3"><label for="modal-3">Tailles sm, default, lg, xl, full (viewport)</label></li>
+                            <li><input type="checkbox" id="modal-4"><label for="modal-4">Structure Header/Body/Footer avec slots flexibles</label></li>
+                            <li><input type="checkbox" id="modal-5"><label for="modal-5">Fermeture Escape key + click outside + close button</label></li>
+                            <li><input type="checkbox" id="modal-6"><label for="modal-6">Focus trap enfermement focus pour accessibilité</label></li>
+                            <li><input type="checkbox" id="modal-7"><label for="modal-7">Z-index management intelligent des couches</label></li>
+                            <li><input type="checkbox" id="modal-8"><label for="modal-8">Variants confirmation, alert, form dialogs</label></li>
+                            <li><input type="checkbox" id="modal-9"><label for="modal-9">Scroll body scrollable avec header/footer fixes</label></li>
+                            <li><input type="checkbox" id="modal-10"><label for="modal-10">Mobile adaptation responsive (bottom sheet style)</label></li>
+                            <li><input type="checkbox" id="modal-11"><label for="modal-11">Tests accessibilité + focus management</label></li>
+                        </ul>
+                    </div>
+                </div>
+                
+                <div class="component priority-medium" data-component="sidebar">
+                    <div class="component-header" onclick="toggleComponent('sidebar')">
+                        <div class="component-title">Sidebar Component</div>
+                        <div class="component-status status-pending">En Attente</div>
+                    </div>
+                    <div class="component-body" id="sidebar-body">
+                        <div class="file-path">📁 src/components/ui/sidebar.tsx</div>
+                        <ul class="checklist" data-component="sidebar">
+                            <li><input type="checkbox" id="sidebar-1"><label for="sidebar-1">Navigation hiérarchique avec accordéons</label></li>
+                            <li><input type="checkbox" id="sidebar-2"><label for="sidebar-2">Modes Collapsed/Expanded avec animations</label></li>
+                            <li><input type="checkbox" id="sidebar-3"><label for="sidebar-3">États actifs indicateurs visuels + breadcrumbs</label></li>
+                            <li><input type="checkbox" id="sidebar-4"><label for="sidebar-4">Transitions animations fluides width/opacity</label></li>
+                            <li><input type="checkbox" id="sidebar-5"><label for="sidebar-5">Badges support notifications/counts</label></li>
+                            <li><input type="checkbox" id="sidebar-6"><label for="sidebar-6">Recherche input intégré avec filtering navigation</label></li>
+                            <li><input type="checkbox" id="sidebar-7"><label for="sidebar-7">Mobile mode overlay avec backdrop</label></li>
+                            <li><input type="checkbox" id="sidebar-8"><label for="sidebar-8">Persistance sauvegarde état utilisateur</label></li>
+                            <li><input type="checkbox" id="sidebar-9"><label for="sidebar-9">Personnalisation réorganisation items (favoris, ordre)</label></li>
+                            <li><input type="checkbox" id="sidebar-10"><label for="sidebar-10">Tests navigation flows + responsive</label></li>
+                        </ul>
+                    </div>
+                </div>
+                
+                <div class="component priority-medium" data-component="tabs">
+                    <div class="component-header" onclick="toggleComponent('tabs')">
+                        <div class="component-title">Tabs Component</div>
+                        <div class="component-status status-pending">En Attente</div>
+                    </div>
+                    <div class="component-body" id="tabs-body">
+                        <div class="file-path">📁 src/components/ui/tabs.tsx</div>
+                        <ul class="checklist" data-component="tabs">
+                            <li><input type="checkbox" id="tabs-1"><label for="tabs-1">Indicateur active tab avec animation fluide</label></li>
+                            <li><input type="checkbox" id="tabs-2"><label for="tabs-2">Orientations Horizontal/Vertical responsive</label></li>
+                            <li><input type="checkbox" id="tabs-3"><label for="tabs-3">Styles line, pill, segment, underline variants</label></li>
+                            <li><input type="checkbox" id="tabs-4"><label for="tabs-4">Icônes support + badges/notifications</label></li>
+                            <li><input type="checkbox" id="tabs-5"><label for="tabs-5">Scroll tabs scrollables sur mobile avec fade edges</label></li>
+                            <li><input type="checkbox" id="tabs-6"><label for="tabs-6">Lazy loading contenu chargé à la demande</label></li>
+                            <li><input type="checkbox" id="tabs-7"><label for="tabs-7">Navigation keyboard arrows + tab key</label></li>
+                            <li><input type="checkbox" id="tabs-8"><label for="tabs-8">Disabled support tabs désactivées avec styling</label></li>
+                            <li><input type="checkbox" id="tabs-9"><label for="tabs-9">Tests navigation + performance lazy loading</label></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Phase 4: Composants Avancés -->
+            <div class="phase phase-4">
+                <div class="phase-header">
+                    <div class="phase-icon">⚡</div>
+                    <div class="phase-title">Phase 4 : Composants Interactifs Avancés</div>
+                </div>
+                
+                <div class="component priority-medium" data-component="draggable">
+                    <div class="component-header" onclick="toggleComponent('draggable')">
+                        <div class="component-title">DraggableList Component</div>
+                        <div class="component-status status-pending">En Attente</div>
+                    </div>
+                    <div class="component-body" id="draggable-body">
+                        <div class="file-path">📁 src/components/ui/draggable-list.tsx</div>
+                        <ul class="checklist" data-component="draggable">
+                            <li><input type="checkbox" id="draggable-1"><label for="draggable-1">Core Drag & drop avec react-beautiful-dnd</label></li>
+                            <li><input type="checkbox" id="draggable-2"><label for="draggable-2">Handles icônes grip visuelles pour drag</label></li>
+                            <li><input type="checkbox" id="draggable-3"><label for="draggable-3">Preview aperçu pendant déplacement</label></li>
+                            <li><input type="checkbox" id="draggable-4"><label for="draggable-4">Groupes support containers multiples</label></li>
+                            <li><input type="checkbox" id="draggable-5"><label for="draggable-5">Callbacks events personnalisables (onDragEnd, etc.)</label></li>
+                            <li><input type="checkbox" id="draggable-6"><label for="draggable-6">Touch support mobile avec gestures</label></li>
+                            <li><input type="checkbox" id="draggable-7"><label for="draggable-7">Restrictions limitations déplacement configurables</label></li>
+                            <li><input type="checkbox" id="draggable-8"><label for="draggable-8">Animation feedback visuel smooth</label></li>
+                            <li><input type="checkbox" id="draggable-9"><label for="draggable-9">Tests interactions complexes</label></li>
+                        </ul>
+                    </div>
+                </div>
+                
+                <div class="component priority-low" data-component="workflow">
+                    <div class="component-header" onclick="toggleComponent('workflow')">
+                        <div class="component-title">Workflow Builder Component</div>
+                        <div class="component-status status-pending">En Attente</div>
+                    </div>
+                    <div class="component-body" id="workflow-body">
+                        <div class="file-path">📁 src/components/ui/workflow-builder.tsx</div>
+                        <ul class="checklist" data-component="workflow">
+                            <li><input type="checkbox" id="workflow-1"><label for="workflow-1">Canvas interface visuelle nodes + connections</label></li>
+                            <li><input type="checkbox" id="workflow-2"><label for="workflow-2">Nodes éléments connectables (triggers, actions, conditions)</label></li>
+                            <li><input type="checkbox" id="workflow-3"><label for="workflow-3">Connexions lignes SVG avec paths intelligents</label></li>
+                            <li><input type="checkbox" id="workflow-4"><label for="workflow-4">Triggers dropdown avec recherche + catégories</label></li>
+                            <li><input type="checkbox" id="workflow-5"><label for="workflow-5">Conditions interface logique (if/then/else)</label></li>
+                            <li><input type="checkbox" id="workflow-6"><label for="workflow-6">Validation workflow en temps réel + erreurs</label></li>
+                            <li><input type="checkbox" id="workflow-7"><label for="workflow-7">Sauvegarde auto-save + versioning</label></li>
+                            <li><input type="checkbox" id="workflow-8"><label for="workflow-8">Templates workflows prédéfinis + marketplace</label></li>
+                            <li><input type="checkbox" id="workflow-9"><label for="workflow-9">Export/Import JSON configurations</label></li>
+                            <li><input type="checkbox" id="workflow-10"><label for="workflow-10">Tests complexité workflow + validation</label></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Phase 5: États et Feedback -->
+            <div class="phase phase-5">
+                <div class="phase-header">
+                    <div class="phase-icon">💫</div>
+                    <div class="phase-title">Phase 5 : États et Feedback</div>
+                </div>
+                
+                <div class="component priority-low" data-component="loading">
+                    <div class="component-header" onclick="toggleComponent('loading')">
+                        <div class="component-title">Loading States Components</div>
+                        <div class="component-status status-pending">En Attente</div>
+                    </div>
+                    <div class="component-body" id="loading-body">
+                        <div class="file-path">📁 src/components/ui/skeleton.tsx | spinner.tsx</div>
+                        <ul class="checklist" data-component="loading">
+                            <li><input type="checkbox" id="loading-1"><label for="loading-1">Skeleton screens pour différents layouts (table, card, list)</label></li>
+                            <li><input type="checkbox" id="loading-2"><label for="loading-2">Spinners variants taille + couleur sémantique</label></li>
+                            <li><input type="checkbox" id="loading-3"><label for="loading-3">Progress bars linéaires + circulaires avec animations</label></li>
+                            <li><input type="checkbox" id="loading-4"><label for="loading-4">Shimmer effects pour données en chargement</label></li>
+                            <li><input type="checkbox" id="loading-5"><label for="loading-5">États vides illustrations + messages + CTAs</label></li>
+                            <li><input type="checkbox" id="loading-6"><label for="loading-6">Error states retry buttons + helpful messages</label></li>
+                            <li><input type="checkbox" id="loading-7"><label for="loading-7">Performance optimisation animations CSS</label></li>
+                            <li><input type="checkbox" id="loading-8"><label for="loading-8">Tests visual regression + performance</label></li>
+                        </ul>
+                    </div>
+                </div>
+                
+                <div class="component priority-low" data-component="toast">
+                    <div class="component-header" onclick="toggleComponent('toast')">
+                        <div class="component-title">Toast/Notification System</div>
+                        <div class="component-status status-pending">En Attente</div>
+                    </div>
+                    <div class="component-body" id="toast-body">
+                        <div class="file-path">📁 src/components/ui/toast.tsx</div>
+                        <ul class="checklist" data-component="toast">
+                            <li><input type="checkbox" id="toast-1"><label for="toast-1">Système queue management intelligent</label></li>
+                            <li><input type="checkbox" id="toast-2"><label for="toast-2">Types success, error, warning, info avec icônes</label></li>
+                            <li><input type="checkbox" id="toast-3"><label for="toast-3">Positionnement configurable (top-right, bottom, etc.)</label></li>
+                            <li><input type="checkbox" id="toast-4"><label for="toast-4">Auto-dismiss avec progress bar countdown</label></li>
+                            <li><input type="checkbox" id="toast-5"><label for="toast-5">Actions buttons dans toasts (undo, details)</label></li>
+                            <li><input type="checkbox" id="toast-6"><label for="toast-6">Animations entrée/sortie + stack management</label></li>
+                            <li><input type="checkbox" id="toast-7"><label for="toast-7">Mobile adaptation bottom positioning</label></li>
+                            <li><input type="checkbox" id="toast-8"><label for="toast-8">Tests queue behavior + timing</label></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="controls">
+        <button class="btn btn-secondary" onclick="saveProgress()">💾 Sauvegarder</button>
+        <button class="btn" onclick="exportProgress()">📊 Exporter</button>
+    </div>
+    
+    <script>
+        // Progress tracking
+        function updateProgress() {
+            const allCheckboxes = document.querySelectorAll('input[type="checkbox"]');
+            const checkedBoxes = document.querySelectorAll('input[type="checkbox"]:checked');
+            const totalTasks = allCheckboxes.length;
+            const completedTasks = checkedBoxes.length;
+            const progressPercentage = Math.round((completedTasks / totalTasks) * 100);
+            
+            document.getElementById('global-progress').textContent = progressPercentage + '%';
+            document.getElementById('completed-tasks').textContent = completedTasks + '/' + totalTasks;
+            document.getElementById('main-progress-fill').style.width = progressPercentage + '%';
+            
+            // Update component counts
+            const components = document.querySelectorAll('.component');
+            let completedComponents = 0;
+            
+            components.forEach(component => {
+                const componentName = component.dataset.component;
+                const componentCheckboxes = component.querySelectorAll('input[type="checkbox"]');
+                const componentChecked = component.querySelectorAll('input[type="checkbox"]:checked');
+                const componentProgress = componentChecked.length / componentCheckboxes.length;
+                
+                const statusElement = component.querySelector('.component-status');
+                if (componentProgress === 1) {
+                    statusElement.textContent = 'Terminé';
+                    statusElement.className = 'component-status status-complete';
+                    completedComponents++;
+                } else if (componentProgress > 0) {
+                    statusElement.textContent = 'En Cours';
+                    statusElement.className = 'component-status status-progress';
+                } else {
+                    statusElement.textContent = 'En Attente';
+                    statusElement.className = 'component-status status-pending';
+                }
+            });
+            
+            document.getElementById('completed-components').textContent = completedComponents + '/' + components.length;
+            
+            // Save to localStorage
+            saveProgress();
+        }
+        
+        function toggleComponent(componentId) {
+            const body = document.getElementById(componentId + '-body');
+            body.classList.toggle('active');
+        }
+        
+        function saveProgress() {
+            const checkboxes = document.querySelectorAll('input[type="checkbox"]');
+            const progress = {};
+            
+            checkboxes.forEach(checkbox => {
+                progress[checkbox.id] = checkbox.checked;
+            });
+            
+            localStorage.setItem('twenty-components-progress', JSON.stringify(progress));
+        }
+        
+        function loadProgress() {
+            const saved = localStorage.getItem('twenty-components-progress');
+            if (saved) {
+                const progress = JSON.parse(saved);
+                Object.keys(progress).forEach(checkboxId => {
+                    const checkbox = document.getElementById(checkboxId);
+                    if (checkbox) {
+                        checkbox.checked = progress[checkboxId];
+                        if (progress[checkboxId]) {
+                            checkbox.closest('li').classList.add('completed');
+                        }
+                    }
+                });
+            }
+        }
+        
+        function exportProgress() {
+            const components = document.querySelectorAll('.component');
+            const report = {
+                timestamp: new Date().toISOString(),
+                globalProgress: document.getElementById('global-progress').textContent,
+                components: []
+            };
+            
+            components.forEach(component => {
+                const componentName = component.dataset.component;
+                const checkboxes = component.querySelectorAll('input[type="checkbox"]');
+                const checkedBoxes = component.querySelectorAll('input[type="checkbox"]:checked');
+                
+                report.components.push({
+                    name: componentName,
+                    progress: Math.round((checkedBoxes.length / checkboxes.length) * 100),
+                    completed: checkedBoxes.length,
+                    total: checkboxes.length
+                });
+            });
+            
+            const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'twenty-components-progress-' + new Date().toISOString().split('T')[0] + '.json';
+            a.click();
+        }
+        
+        // Event listeners
+        document.addEventListener('DOMContentLoaded', function() {
+            loadProgress();
+            updateProgress();
+            
+            // Add change listeners to all checkboxes
+            document.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
+                checkbox.addEventListener('change', function() {
+                    if (this.checked) {
+                        this.closest('li').classList.add('completed');
+                    } else {
+                        this.closest('li').classList.remove('completed');
+                    }
+                    updateProgress();
+                });
+            });
+        });
+    </script>
+</body>
+</html>

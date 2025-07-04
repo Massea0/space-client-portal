@@ -1,0 +1,113 @@
+/* src/styles/button-animations.css */
+
+/* Animations pour les boutons interactifs */
+.animated-btn {
+  transition: transform 0.2s var(--ease-bounce), box-shadow 0.2s var(--ease-out);
+}
+
+.animated-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-medium);
+}
+
+.animated-btn:active {
+  transform: translateY(0);
+  box-shadow: var(--shadow-subtle);
+}
+
+/* Effet de pulsation pour les boutons d'action principale */
+.pulse-btn {
+  position: relative;
+}
+
+.pulse-btn::after {
+  content: '';
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  top: 0;
+  left: 0;
+  animation: pulse 2s infinite;
+  box-shadow: 0 0 0 0 rgb(var(--primary-rgb), 0.7);
+}
+
+@keyframes pulse {
+  0% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgb(var(--primary-rgb), 0.7);
+  }
+
+  70% {
+    transform: scale(1);
+    box-shadow: 0 0 0 10px rgb(var(--primary-rgb), 0);
+  }
+
+  100% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgb(var(--primary-rgb), 0);
+  }
+}
+
+/* Effet au survol des cartes */
+.animated-card {
+  transition: transform 0.3s var(--ease-out), box-shadow 0.3s var(--ease-out);
+  position: relative;
+  overflow: hidden;
+}
+
+.animated-card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-medium);
+}
+
+/* Effet de bordure brillante sur les cartes */
+.animated-card-glow {
+  position: relative;
+  overflow: hidden;
+}
+
+.animated-card-glow::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 50%;
+  height: 100%;
+  background: linear-gradient(
+    to right,
+    transparent,
+    rgb(var(--arcadis-blue-rgb), 0.2),
+    transparent
+  );
+  transition: left 0.7s ease;
+}
+
+.animated-card-glow:hover::before {
+  left: 150%;
+}
+
+/* Animation pour les inputs */
+.animated-input {
+  transition: border-color 0.2s ease, box-shadow 0.3s ease;
+}
+
+.animated-input:focus {
+  border-color: hsl(var(--arcadis-blue));
+  box-shadow: 0 0 0 2px rgb(var(--arcadis-blue-rgb), 0.25);
+}
+
+/* Effet de focus amélioré */
+.animated-input-glow:focus {
+  box-shadow: var(--glow-blue);
+  border-color: hsl(var(--arcadis-accent-blue));
+}
+
+/* Animation pour les lignes de tableau */
+.animated-row {
+  transition: background-color 0.2s ease;
+}
+
+.animated-row:hover {
+  background-color: rgb(var(--primary-rgb), 0.05);
+}

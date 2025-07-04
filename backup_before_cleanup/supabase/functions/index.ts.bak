@@ -1,0 +1,100 @@
+import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
+class AppError extends Error {
+  statusCode;
+  constructor(message, statusCode) {
+    super(message);
+    this.statusCode = statusCode;
+    this.name = 'AppError';
+  }
+}
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type'
+};
+
+serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders });
+  }
+  try {
+    const supabaseClient = createClient(
+      Deno.env.get('SUPABASE_URL') || '',
+      Deno.env.get('SUPABASE_ANON_KEY') || '',
+      {
+        global: {
+          headers: { Authorization: req.headers.get('Authorization') || '' }
+        }
+      }
+    );
+    const url = new URL(req.url);
+    const transactionId = url.searchParams.get('transactionId');
+    const invoiceId = url.searchParams.get('invoiceId');
+    if (!transactionId && !invoiceId) {
+      throw new AppError('transactionId ou invoiceId requis', 400);
+    }
+    let transaction;
+    if (transactionId) {
+      const { data, error } = await supabaseClient
+        .from('payment_transactions')
+        .select('*')
+        .eq('transaction_id', transactionId)
+        .single();
+      if (error) throw new AppError('Transaction non trouvée', 404);
+      transaction = data;
+    } else if (invoiceId) {
+      const { data, error } = await supabaseClient
+        .from('payment_transactions')
+        .select('*')
+        .eq('invoice_id', invoiceId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+      if (error) throw new AppError('Transaction non trouvée pour cette facture', 404);
+      transaction = data;
+    }
+    const { data: invoice, error: invoiceError } = await supabaseClient
+      .from('invoices')
+      .select('status')
+      .eq('id', transaction.invoice_id)
+      .single();
+    if (invoiceError) throw new AppError('Facture non trouvée', 404);
+    // La facture est la source de vérité finale - si elle est payée, on renvoie toujours "paid" 
+    // quelle que soit la valeur dans payment_transactions
+    let finalStatus = invoice.status === 'paid' ? 'paid' : transaction.status;
+    
+    // Log détaillé pour le débogage
+    console.log(`[payment-status] Statut final pour invoice ${invoice.id}: ${finalStatus} (transaction: ${transaction.status}, invoice: ${invoice.status})`);
+    
+    return new Response(
+      JSON.stringify({
+        status: finalStatus,
+        invoiceStatus: invoice.status,
+        transactionId: transaction.transaction_id,
+        externalTransactionId: transaction.external_transaction_id || null,
+        paymentMethod: transaction.payment_method
+      }),
+      {
+        headers: {
+          ...corsHeaders,
+          'Content-Type': 'application/json'
+        },
+        status: 200
+      }
+    );
+  } catch (error) {
+    const statusCode = error instanceof AppError ? error.statusCode : 500;
+    return new Response(
+      JSON.stringify({ error: error.message || 'Erreur serveur' }),
+      {
+        headers: {
+          ...corsHeaders,
+          'Content-Type': 'application/json'
+        },
+        status: statusCode
+      }
+    );
+  }
+});

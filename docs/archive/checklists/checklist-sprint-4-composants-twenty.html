@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Checklist Sprint 4 - Composants Twenty</title>
+    <style>
+        :root {
+            --primary: #3b82f6;
+            --primary-dark: #2563eb;
+            --secondary: #10b981;
+            --accent: #8b5cf6;
+            --gray-100: #f3f4f6;
+            --gray-200: #e5e7eb;
+            --gray-300: #d1d5db;
+            --gray-700: #374151;
+            --gray-800: #1f2937;
+            --gray-900: #111827;
+            --danger: #ef4444;
+        }
+
+        body {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            color: var(--gray-800);
+            background-color: var(--gray-100);
+            margin: 0;
+            padding: 1rem;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background-color: white;
+            border-radius: 0.5rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            overflow: hidden;
+        }
+
+        header {
+            background-color: var(--primary);
+            color: white;
+            padding: 1.5rem;
+            text-align: center;
+        }
+
+        main {
+            padding: 2rem;
+        }
+
+        h1 {
+            margin: 0;
+            font-size: 2rem;
+            font-weight: 700;
+        }
+
+        h2 {
+            font-size: 1.5rem;
+            color: var(--primary-dark);
+            margin-top: 2rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 2px solid var(--gray-200);
+        }
+
+        h3 {
+            font-size: 1.25rem;
+            color: var(--gray-800);
+            margin-top: 1.5rem;
+        }
+
+        .progress-container {
+            display: flex;
+            align-items: center;
+            margin: 1.5rem 0;
+            gap: 1rem;
+        }
+
+        .progress-bar {
+            flex-grow: 1;
+            height: 0.75rem;
+            background-color: var(--gray-200);
+            border-radius: 9999px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background-color: var(--secondary);
+            border-radius: 9999px;
+            transition: width 0.3s ease;
+        }
+
+        .progress-text {
+            font-weight: 600;
+            color: var(--gray-700);
+            font-size: 0.875rem;
+        }
+
+        .checklist {
+            list-style-type: none;
+            padding: 0;
+            margin: 1rem 0;
+        }
+
+        .checklist-item {
+            margin-bottom: 0.75rem;
+            display: flex;
+            align-items: center;
+            padding: 0.75rem;
+            border: 1px solid var(--gray-200);
+            border-radius: 0.375rem;
+            transition: background-color 0.2s ease;
+        }
+
+        .checklist-item:hover {
+            background-color: var(--gray-100);
+        }
+
+        .item-checkbox {
+            margin-right: 0.75rem;
+            width: 1.25rem;
+            height: 1.25rem;
+        }
+
+        .item-label {
+            flex-grow: 1;
+        }
+
+        .item-status {
+            font-size: 0.75rem;
+            padding: 0.25rem 0.5rem;
+            border-radius: 9999px;
+            font-weight: 600;
+        }
+
+        .status-done {
+            background-color: rgba(16, 185, 129, 0.2);
+            color: #065f46;
+        }
+
+        .status-pending {
+            background-color: rgba(245, 158, 11, 0.2);
+            color: #92400e;
+        }
+
+        .status-blocked {
+            background-color: rgba(239, 68, 68, 0.2);
+            color: #b91c1c;
+        }
+
+        .component-details {
+            font-size: 0.875rem;
+            color: var(--gray-700);
+            padding-left: 2.5rem;
+            margin-top: -0.5rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .component-details ul {
+            padding-left: 1.25rem;
+            margin-top: 0.25rem;
+            margin-bottom: 0.25rem;
+        }
+
+        @media (max-width: 768px) {
+            main {
+                padding: 1.25rem;
+            }
+
+            .checklist-item {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .item-status {
+                margin-top: 0.5rem;
+                align-self: flex-end;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Sprint 4 - Composants avancés Twenty-Inspired</h1>
+        </header>
+        <main>
+            <div class="progress-container">
+                <div class="progress-bar">
+                    <div class="progress-fill" style="width: 10%;"></div>
+                </div>
+                <div class="progress-text">10% terminé</div>
+            </div>
+
+            <h2>1. DraggableList et DraggableItem</h2>
+            <ul class="checklist">
+                <li class="checklist-item">
+                    <input type="checkbox" class="item-checkbox" id="drag-structure">
+                    <label class="item-label" for="drag-structure">Structure de base des composants</label>
+                    <span class="item-status status-pending">En cours</span>
+                </li>
+                <div class="component-details">
+                    <ul>
+                        <li>Création des fichiers draggable-list.tsx et draggable-item.tsx</li>
+                        <li>Configuration de dnd-kit avec sortableKeyboardCoordinates</li>
+                    </ul>
+                </div>
+                <li class="checklist-item">
+                    <input type="checkbox" class="item-checkbox" id="drag-props">
+                    <label class="item-label" for="drag-props">API et props personnalisés</label>
+                    <span class="item-status status-pending">À faire</span>
+                </li>
+                <li class="checklist-item">
+                    <input type="checkbox" class="item-checkbox" id="drag-styles">
+                    <label class="item-label" for="drag-styles">Styles et animations</label>
+                    <span class="item-status status-pending">À faire</span>
+                </li>
+                <li class="checklist-item">
+                    <input type="checkbox" class="item-checkbox" id="drag-tests">
+                    <label class="item-label" for="drag-tests">Tests et compatibilité</label>
+                    <span class="item-status status-pending">À faire</span>
+                </li>
+                <li class="checklist-item">
+                    <input type="checkbox" class="item-checkbox" id="drag-docs">
+                    <label class="item-label" for="drag-docs">Documentation et exemples</label>
+                    <span class="item-status status-pending">À faire</span>
+                </li>
+            </ul>
+
+            <h2>2. Workflow Builder</h2>
+            <ul class="checklist">
+                <li class="checklist-item">
+                    <input type="checkbox" class="item-checkbox" id="workflow-structure">
+                    <label class="item-label" for="workflow-structure">Structure de base des composants</label>
+                    <span class="item-status status-pending">En cours</span>
+                </li>
+                <div class="component-details">
+                    <ul>
+                        <li>Création de workflow-builder.tsx et sous-composants</li>
+                        <li>Intégration de ReactFlow pour la base du workflow</li>
+                    </ul>
+                </div>
+                <li class="checklist-item">
+                    <input type="checkbox" class="item-checkbox" id="workflow-nodes">
+                    <label class="item-label" for="workflow-nodes">Nœuds et connexions personnalisés</label>
+                    <span class="item-status status-pending">À faire</span>
+                </li>
+                <li class="checklist-item">
+                    <input type="checkbox" class="item-checkbox" id="workflow-controls">
+                    <label class="item-label" for="workflow-controls">Contrôles et actions</label>
+                    <span class="item-status status-pending">À faire</span>
+                </li>
+                <li class="checklist-item">
+                    <input type="checkbox" class="item-checkbox" id="workflow-validation">
+                    <label class="item-label" for="workflow-validation">Validation et sauvegarde</label>
+                    <span class="item-status status-pending">À faire</span>
+                </li>
+                <li class="checklist-item">
+                    <input type="checkbox" class="item-checkbox" id="workflow-docs">
+                    <label class="item-label" for="workflow-docs">Documentation et exemples</label>
+                    <span class="item-status status-pending">À faire</span>
+                </li>
+            </ul>
+
+            <h2>3. Optimisation et Finalisation</h2>
+            <ul class="checklist">
+                <li class="checklist-item">
+                    <input type="checkbox" class="item-checkbox" id="opt-performance">
+                    <label class="item-label" for="opt-performance">Audit de performance</label>
+                    <span class="item-status status-pending">À faire</span>
+                </li>
+                <li class="checklist-item">
+                    <input type="checkbox" class="item-checkbox" id="opt-lazy">
+                    <label class="item-label" for="opt-lazy">Implémentation du lazy loading</label>
+                    <span class="item-status status-pending">À faire</span>
+                </li>
+                <li class="checklist-item">
+                    <input type="checkbox" class="item-checkbox" id="opt-a11y">
+                    <label class="item-label" for="opt-a11y">Tests d'accessibilité</label>
+                    <span class="item-status status-pending">À faire</span>
+                </li>
+                <li class="checklist-item">
+                    <input type="checkbox" class="item-checkbox" id="opt-doc">
+                    <label class="item-label" for="opt-doc">Finalisation de la documentation technique</label>
+                    <span class="item-status status-pending">À faire</span>
+                </li>
+            </ul>
+
+            <h2>4. Documentation et Intégration</h2>
+            <ul class="checklist">
+                <li class="checklist-item">
+                    <input type="checkbox" class="item-checkbox" id="doc-guide">
+                    <label class="item-label" for="doc-guide">Mise à jour du guide d'utilisation</label>
+                    <span class="item-status status-pending">À faire</span>
+                </li>
+                <li class="checklist-item">
+                    <input type="checkbox" class="item-checkbox" id="doc-roadmap">
+                    <label class="item-label" for="doc-roadmap">Mise à jour de la roadmap</label>
+                    <span class="item-status status-pending">À faire</span>
+                </li>
+                <li class="checklist-item">
+                    <input type="checkbox" class="item-checkbox" id="doc-examples">
+                    <label class="item-label" for="doc-examples">Exemples d'intégration</label>
+                    <span class="item-status status-pending">À faire</span>
+                </li>
+                <li class="checklist-item">
+                    <input type="checkbox" class="item-checkbox" id="doc-practices">
+                    <label class="item-label" for="doc-practices">Bonnes pratiques et optimisation</label>
+                    <span class="item-status status-pending">À faire</span>
+                </li>
+            </ul>
+        </main>
+    </div>
+
+    <script>
+        // Script pour mettre à jour la progression en fonction des cases cochées
+        function updateProgress() {
+            const checkboxes = document.querySelectorAll('.item-checkbox');
+            const total = checkboxes.length;
+            let checked = 0;
+            
+            checkboxes.forEach(checkbox => {
+                if (checkbox.checked) {
+                    checked++;
+                    const item = checkbox.closest('.checklist-item');
+                    const status = item.querySelector('.item-status');
+                    status.className = 'item-status status-done';
+                    status.textContent = 'Terminé';
+                }
+            });
+            
+            const percentage = Math.round((checked / total) * 100);
+            document.querySelector('.progress-fill').style.width = percentage + '%';
+            document.querySelector('.progress-text').textContent = percentage + '% terminé';
+        }
+        
+        // Ajouter les écouteurs d'événements aux cases à cocher
+        document.querySelectorAll('.item-checkbox').forEach(checkbox => {
+            checkbox.addEventListener('change', updateProgress);
+        });
+
+        // Initialiser la progression
+        updateProgress();
+    </script>
+</body>
+</html>

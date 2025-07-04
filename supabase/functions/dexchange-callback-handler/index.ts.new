@@ -1,0 +1,458 @@
+// dexchange-callback-handler/index.ts
+// Fonction pour recevoir les webhooks de DExchange
+// Cette fonction est configurée sans authentification JWT pour accepter les webhooks externes
+
+import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+
+// En-têtes CORS pour les réponses
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-webhook-secret, x-signature, x-dexchange-signature, x-relay-secret'
+}
+
+// --- Configuration et intégration avec DExchange ---
+// Utilisation des mêmes variables d'environnement que le relais DExchange GCP
+const DEXCHANGE_API_BASE_URL = 'https://api-m.dexchange.sn/api/v1';
+const DEXCHANGE_API_KEY = Deno.env.get('DEXCHANGE_API_KEY'); // Clé API pour les appels à DExchange
+const RELAY_SECRET = Deno.env.get('RELAY_SECRET');          // Secret partagé pour le relais
+const WEBHOOK_SECRET = Deno.env.get('DEXCHANGE_WEBHOOK_SECRET') || Deno.env.get('WEBHOOK_SECRET'); // Secret pour valider les webhooks
+
+// Logging amélioré avec ID unique par requête
+function createLogger(requestId: string) {
+  return {
+    info: (message: string, data?: any) => {
+      console.log(`[INFO:${requestId}] ${message}`, data ? JSON.stringify(data) : '')
+    },
+    warn: (message: string, data?: any) => {
+      console.warn(`[WARN:${requestId}] ${message}`, data ? JSON.stringify(data) : '')
+    },
+    error: (message: string, data?: any) => {
+      console.error(`[ERROR:${requestId}] ${message}`, data ? JSON.stringify(data) : '')
+    },
+    success: (message: string, data?: any) => {
+      console.log(`[SUCCESS:${requestId}] ${message}`, data ? JSON.stringify(data) : '')
+    }
+  }
+}
+
+// Valider la signature du webhook
+function validateWebhookSignature(signature: string | null): boolean {
+  // Si aucun secret n'est configuré, considérer comme valide (mode test)
+  if (!WEBHOOK_SECRET) return true
+  
+  // Si secret configuré mais pas de signature, invalide
+  if (WEBHOOK_SECRET && !signature) return false
+  
+  // Vérifier si la signature correspond au secret
+  // Format possible : "Bearer xxxxx" ou juste "xxxxx"
+  if (signature?.startsWith('Bearer ')) {
+    return signature.substring(7) === WEBHOOK_SECRET
+  }
+  
+  return signature === WEBHOOK_SECRET
+}
+
+// Fonction pour journaliser les événements dans payment_statistics
+async function logPaymentEvent(supabase, eventType: string, status: boolean, metadata: any) {
+  const today = new Date().toISOString().split('T')[0]
+  
+  try {
+    // Récupérer les statistiques du jour
+    const { data: stats } = await supabase
+      .from('payment_statistics')
+      .select('*')
+      .eq('date', today)
+      .maybeSingle()
+    
+    if (stats) {
+      // Mettre à jour les statistiques existantes
+      await supabase
+        .from('payment_statistics')
+        .update({
+          webhook_received_count: (stats.webhook_received_count || 0) + 1,
+          successful_payments: status ? (stats.successful_payments || 0) + 1 : stats.successful_payments,
+          failed_payments: !status ? (stats.failed_payments || 0) + 1 : stats.failed_payments,
+          updated_at: new Date().toISOString()
+        })
+        .eq('date', today)
+    } else {
+      // Créer une nouvelle entrée de statistiques
+      await supabase
+        .from('payment_statistics')
+        .insert({
+          date: today,
+          webhook_received_count: 1,
+          successful_payments: status ? 1 : 0,
+          failed_payments: !status ? 1 : 0,
+          total_payments: 0,
+          wave_payments: 0,
+          total_amount: 0,
+          wave_amount: 0,
+          auto_marked_count: 0,
+          metadata: { last_event: eventType }
+        })
+    }
+  } catch (error) {
+    // En cas d'erreur, continuer - la journalisation ne doit pas bloquer le flux
+    console.error('Erreur lors de la mise à jour des statistiques:', error)
+  }
+}
+
+// Fonction pour marquer une facture comme payée dans Supabase
+async function markInvoiceAsPaid(supabase, invoiceId: string, transactionId: string, paymentData: any) {
+  try {
+    // Récupérer la facture
+    const { data: invoice, error: invoiceError } = await supabase
+      .from('invoices')
+      .select('*')
+      .eq('id', invoiceId)
+      .single()
+    
+    if (invoiceError || !invoice) {
+      return { success: false, error: `Facture non trouvée: ${invoiceId}` }
+    }
+    
+    // Mettre à jour le statut de la facture
+    const { error: updateError } = await supabase
+      .from('invoices')
+      .update({
+        status: 'paid',
+        payment_status: 'completed',
+        payment_method: 'wave',
+        payment_date: new Date().toISOString(),
+        payment_reference: transactionId,
+        payment_metadata: paymentData
+      })
+      .eq('id', invoiceId)
+    
+    if (updateError) {
+      return { success: false, error: `Erreur lors de la mise à jour de la facture: ${updateError.message}` }
+    }
+    
+    return { success: true, invoice }
+  } catch (error) {
+    return { success: false, error: `Exception lors du marquage de la facture: ${error.message}` }
+  }
+}
+
+// Fonction principale
+serve(async (req) => {
+  // Générer un ID unique pour cette requête
+  const requestId = crypto.randomUUID().slice(0, 8)
+  const timestamp = new Date().toISOString()
+  const logger = createLogger(requestId)
+  
+  // Vérifier la configuration des variables d'environnement
+  if (!Deno.env.get('SUPABASE_URL') || !Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')) {
+    logger.error('Configuration Supabase manquante')
+    return new Response(
+      JSON.stringify({ 
+        error: 'Configuration serveur incomplète', 
+        details: 'Variables Supabase non définies',
+        requestId
+      }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    )
+  }
+  
+  // Avertissement si les clés DExchange ne sont pas configurées
+  if (!DEXCHANGE_API_KEY) {
+    logger.warn('DEXCHANGE_API_KEY non configurée - les appels d\'API DExchange ne fonctionneront pas')
+  }
+  
+  // Avertissement si le secret du webhook n'est pas configuré
+  if (!WEBHOOK_SECRET) {
+    logger.warn('Aucun DEXCHANGE_WEBHOOK_SECRET ou WEBHOOK_SECRET configuré - la validation de signature est désactivée')
+  }
+  
+  // Client Supabase avec privilèges admin
+  const supabase = createClient(
+    Deno.env.get('SUPABASE_URL') || '',
+    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
+  )
+  
+  // Gérer les requêtes OPTIONS pour CORS
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders })
+  }
+  
+  // Vérifier la signature (sécurité)
+  const signature = 
+    req.headers.get('x-webhook-secret') || 
+    req.headers.get('x-signature') || 
+    req.headers.get('x-dexchange-signature')
+  
+  const signatureValid = validateWebhookSignature(signature)
+  
+  logger.info(`Nouvelle requête webhook reçue`, { 
+    requestId, 
+    method: req.method, 
+    signatureProvided: !!signature,
+    signatureValid
+  })
+  
+  // Rejeter les requêtes avec signature invalide
+  if (!signatureValid && WEBHOOK_SECRET) {
+    logger.warn(`Signature invalide rejetée`, { requestId })
+    
+    // Créer alerte de sécurité
+    try {
+      await supabase
+        .from('payment_alerts')
+        .insert({
+          type: 'security_warning',
+          level: 'high',
+          message: `Tentative d'accès avec signature invalide`,
+          metadata: { requestId, timestamp },
+          resolved: false,
+          created_at: timestamp
+        })
+    } catch (error) {
+      logger.error(`Erreur lors de la création de l'alerte:`, { error: error.message })
+    }
+    
+    return new Response(
+      JSON.stringify({ error: 'Signature invalide', requestId }),
+      { 
+        status: 403, 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      }
+    )
+  }
+  
+  // Lire le corps de la requête
+  let body: string
+  try {
+    body = await req.text()
+    logger.info(`Corps reçu: ${body.length} caractères`)
+  } catch (error) {
+    logger.error(`Erreur lors de la lecture du corps:`, { error: error.message })
+    return new Response(
+      JSON.stringify({ error: 'Impossible de lire le corps de la requête', requestId }),
+      { 
+        status: 400, 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      }
+    )
+  }
+  
+  // Traiter un body vide comme un ping de test
+  if (!body || body.trim() === '') {
+    logger.info(`Body vide - ping détecté`)
+    await logPaymentEvent(supabase, 'ping', true, { requestId })
+    return new Response(
+      JSON.stringify({ 
+        status: 'ok', 
+        message: 'Webhook endpoint opérationnel',
+        requestId
+      }),
+      { 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      }
+    )
+  }
+  
+  // Parser le JSON
+  let data
+  try {
+    data = JSON.parse(body)
+    logger.info(`JSON parsé avec succès`, { eventType: data.event || data.type })
+  } catch (error) {
+    logger.error(`Erreur parsing JSON:`, { error: error.message })
+    await logPaymentEvent(supabase, 'parse_error', false, { requestId, bodyPreview: body.slice(0, 100) })
+    return new Response(
+      JSON.stringify({ 
+        error: 'Format JSON invalide', 
+        requestId
+      }),
+      { 
+        status: 400, 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      }
+    )
+  }
+  
+  // Extraire les informations du paiement avec flexibilité
+  try {
+    const eventType = data.event || data.type || data.action || 'webhook'
+    logger.info(`Traitement de l'événement: ${eventType}`)
+    
+    // Vérifier s'il s'agit d'un événement de paiement
+    const isPaymentEvent = 
+      eventType.includes('payment') || 
+      eventType.includes('transaction') ||
+      eventType === 'completed' ||
+      eventType === 'succeeded'
+    
+    if (!isPaymentEvent) {
+      logger.info(`Événement non lié au paiement ignoré: ${eventType}`)
+      await logPaymentEvent(supabase, eventType, true, { requestId })
+      return new Response(
+        JSON.stringify({ 
+          status: 'ok', 
+          message: 'Événement reçu mais ignoré (non lié au paiement)',
+          requestId
+        }),
+        { 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        }
+      )
+    }
+    
+    // Extraire les données pertinentes avec flexibilité pour différents formats
+    const paymentData = data.data?.object || data.data || data
+    
+    // Extraire l'ID de transaction avec différentes structures possibles
+    const transactionId = 
+      paymentData.id || 
+      paymentData.transaction_id || 
+      paymentData.payment_id ||
+      data.transaction_id ||
+      null
+    
+    if (!transactionId) {
+      logger.error(`ID de transaction manquant dans le webhook`, { payload: data })
+      await logPaymentEvent(supabase, eventType, false, { requestId, error: 'missing_transaction_id' })
+      return new Response(
+        JSON.stringify({ 
+          error: 'ID de transaction manquant', 
+          requestId
+        }),
+        { 
+          status: 400, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        }
+      )
+    }
+    
+    // Extraire l'ID de facture des métadonnées ou des champs directs
+    const invoiceId = 
+      paymentData.metadata?.invoice_id || 
+      paymentData.invoice_id || 
+      data.invoice_id ||
+      null
+    
+    if (!invoiceId) {
+      logger.warn(`ID de facture manquant, impossible de mettre à jour`, { transactionId })
+      await logPaymentEvent(supabase, eventType, false, { requestId, transactionId, error: 'missing_invoice_id' })
+      
+      // Stocker l'événement pour traitement manuel ultérieur
+      try {
+        await supabase
+          .from('payment_alerts')
+          .insert({
+            type: 'orphan_webhook',
+            level: 'medium',
+            message: `Webhook sans ID de facture reçu`,
+            metadata: { requestId, transactionId, data: JSON.stringify(data) },
+            resolved: false,
+            created_at: timestamp
+          })
+      } catch (error) {
+        logger.error(`Erreur lors de la création de l'alerte:`, { error: error.message })
+      }
+      
+      return new Response(
+        JSON.stringify({ 
+          status: 'partial', 
+          message: 'Événement reçu mais ID de facture manquant',
+          requestId,
+          transactionId
+        }),
+        { 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        }
+      )
+    }
+    
+    // Vérifier si le paiement est confirmé
+    const isSuccess = 
+      paymentData.status === 'completed' || 
+      paymentData.status === 'succeeded' ||
+      eventType.includes('success') ||
+      eventType.includes('completed') ||
+      eventType.includes('succeeded')
+    
+    // Si le paiement est confirmé, mettre à jour la facture
+    if (isSuccess) {
+      logger.info(`Paiement confirmé`, { transactionId, invoiceId })
+      const result = await markInvoiceAsPaid(supabase, invoiceId, transactionId, paymentData)
+      
+      if (result.success) {
+        logger.success(`Facture marquée comme payée avec succès`, { invoiceId, transactionId })
+        await logPaymentEvent(supabase, 'payment_success', true, { 
+          requestId, transactionId, invoiceId, amount: paymentData.amount 
+        })
+        
+        return new Response(
+          JSON.stringify({ 
+            status: 'ok', 
+            message: 'Paiement confirmé et facture mise à jour',
+            requestId,
+            invoiceId,
+            transactionId
+          }),
+          { 
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          }
+        )
+      } else {
+        logger.error(`Échec de mise à jour de la facture`, { error: result.error })
+        await logPaymentEvent(supabase, 'payment_error', false, { 
+          requestId, transactionId, invoiceId, error: result.error 
+        })
+        
+        return new Response(
+          JSON.stringify({ 
+            status: 'error', 
+            message: 'Échec de mise à jour de la facture',
+            error: result.error,
+            requestId,
+            invoiceId,
+            transactionId
+          }),
+          { 
+            status: 500,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          }
+        )
+      }
+    }
+    
+    // Si le paiement n'est pas confirmé, juste logger l'événement
+    logger.info(`Événement de paiement non confirmé reçu`, { status: paymentData.status })
+    await logPaymentEvent(supabase, eventType, true, { requestId, transactionId, invoiceId, status: paymentData.status })
+    
+    return new Response(
+      JSON.stringify({ 
+        status: 'ok', 
+        message: 'Événement reçu et traité',
+        paymentStatus: paymentData.status,
+        requestId,
+        invoiceId,
+        transactionId
+      }),
+      { 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      }
+    )
+    
+  } catch (error) {
+    // Gestion des erreurs générales
+    logger.error(`Erreur lors du traitement du webhook:`, { error: error.message })
+    await logPaymentEvent(supabase, 'processing_error', false, { requestId, error: error.message })
+    
+    return new Response(
+      JSON.stringify({ 
+        error: 'Erreur lors du traitement du webhook', 
+        details: error.message,
+        requestId
+      }),
+      { 
+        status: 500, 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      }
+    )
+  }
+})

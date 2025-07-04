@@ -1,0 +1,9 @@
+# Redirections pour SPA (Single Page Application)
+# Toutes les routes doivent rediriger vers index.html pour que React Router fonctionne
+
+# Redirections spécifiques pour les pages de paiement
+/payment/success /index.html 200
+/payment/cancel /index.html 200
+
+# Redirection générale pour toutes les autres routes
+/* /index.html 200

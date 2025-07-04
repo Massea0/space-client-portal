@@ -1,0 +1,83 @@
+// Test simple pour diagnostiquer l'authentification et l'Edge Function
+// Testez cette page en naviguant vers http://localhost:8080/test-analytics.html
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Analytics Edge Function</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+    <h1>Test Analytics Edge Function</h1>
+    <button id="testBtn">Test Edge Function</button>
+    <div id="result"></div>
+
+    <script>
+        const { createClient } = supabase;
+        const supabaseClient = createClient(
+            'https://qlqgyrfqiflnqknbtycw.supabase.co',
+            'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFscWd5cmZxaWZsbnFrbmJ0eWN3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3MjcyNzA5NzEsImV4cCI6MjA0Mjg0Njk3MX0.Z3Y8aQJ1yktMORGPm4nVDK-pJ2AvxNLOBK-POAUw7pY'
+        );
+
+        document.getElementById('testBtn').addEventListener('click', async () => {
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = 'Testing...';
+
+            try {
+                // Test d'authentification
+                const { data: sessionData, error: sessionError } = await supabaseClient.auth.getSession();
+                console.log('Session:', sessionData);
+                
+                if (!sessionData.session) {
+                    resultDiv.innerHTML = `
+                        <div style="color: red;">
+                            <h3>❌ Pas de session d'authentification</h3>
+                            <p>Vous devez être connecté pour utiliser les analytics.</p>
+                            <p>Connectez-vous d'abord sur l'application principale.</p>
+                        </div>
+                    `;
+                    return;
+                }
+
+                // Test de l'Edge Function avec session
+                const response = await fetch(
+                    'https://qlqgyrfqiflnqknbtycw.supabase.co/functions/v1/dashboard-analytics-generator',
+                    {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${sessionData.session.access_token}`,
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ period_days: 30 }),
+                    }
+                );
+
+                if (response.ok) {
+                    const data = await response.json();
+                    resultDiv.innerHTML = `
+                        <div style="color: green;">
+                            <h3>✅ Success!</h3>
+                            <pre>${JSON.stringify(data, null, 2)}</pre>
+                        </div>
+                    `;
+                } else {
+                    const errorText = await response.text();
+                    resultDiv.innerHTML = `
+                        <div style="color: red;">
+                            <h3>❌ Error ${response.status}</h3>
+                            <pre>${errorText}</pre>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div style="color: red;">
+                        <h3>❌ Exception</h3>
+                        <pre>${error.message}</pre>
+                    </div>
+                `;
+            }
+        });
+    </script>
+</body>
+</html>

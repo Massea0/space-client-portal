@@ -130,13 +130,14 @@ NumberInputController.displayName = 'NumberInputController';
 
 // --- DevisForm ---
 interface DevisFormProps {
-  onSubmit: (data: DevisFormSubmitData) => Promise<void>;
+  onSubmit: (data: DevisFormSubmitData) => Promise<void> | void;
   onCancel: () => void;
   isLoading: boolean;
   initialData?: Partial<Omit<DevisFormValues, 'number'>>;
+  editMode?: boolean;
 }
 
-const DevisForm: React.FC<DevisFormProps> = ({ onSubmit, onCancel, isLoading, initialData }) => {
+const DevisForm: React.FC<DevisFormProps> = ({ onSubmit, onCancel, isLoading, initialData, editMode = false }) => {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [loadingCompanies, setLoadingCompanies] = useState(true);
 
@@ -352,7 +353,7 @@ const DevisForm: React.FC<DevisFormProps> = ({ onSubmit, onCancel, isLoading, in
             Annuler
           </Button>
           <Button type="submit" disabled={isLoading}>
-            {isLoading ? 'Enregistrement...' : 'Enregistrer le Devis'}
+            {isLoading ? 'Enregistrement...' : editMode ? 'Mettre à jour le Devis' : 'Enregistrer le Devis'}
           </Button>
         </div>
       </form>

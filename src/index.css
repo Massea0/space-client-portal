@@ -1,130 +1,602 @@
-/* src/index.css */
+@import url('./styles/button-animations.css');
+@import url('./styles/theme-fixes.css');
+
+/* ===============================================
+   ARCADIS ENTERPRISE OS - DESIGN SYSTEM UNIFIÉ
+   Design moderne inspiré de Twenty avec cohérence totale
+   =============================================== */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* Arcadis Space Design System */
-
 @layer base {
   :root {
-    --background: 0 0% 100%; /* White */
-    --foreground: 227 58% 21%; /* Dark Navy Blue hsl(227, 58%, 21%) */
-
-    --card: 0 0% 100%; /* White */
-    --card-foreground: 227 58% 21%; /* Dark Navy Blue */
-
-    --popover: 0 0% 100%; /* White */
-    --popover-foreground: 227 58% 21%; /* Dark Navy Blue */
-
-    --primary: 217 91% 60%; /* Arcadis Blue (hsl(217, 91%, 60%) for #3b82f6) */
-    --primary-foreground: 0 0% 100%; /* White */
-
-    --secondary: 220 29% 95%; /* Very Light Gray (hsl(220, 29%, 95%) for #f1f5f9) */
-    --secondary-foreground: 227 58% 21%; /* Dark Navy Blue */
-
-    --muted: 220 29% 95%; /* Very Light Gray */
-    --muted-foreground: 215 19% 47%; /* Medium Gray (hsl(215, 19%, 47%) for #64748b) */
-
-    --accent: 220 87% 93%; /* Very Light Blue (hsl(220, 87%, 93%) for #dbeafe) */
-    --accent-foreground: 224 63% 33%; /* Darker Blue (hsl(224, 63%, 33%) for #1e3a8a) */
-
-    --destructive: 0 72% 51%; /* Red (hsl(0, 72%, 51%) for #dc2626) */
-    --destructive-foreground: 0 0% 100%; /* White */
-
-    --border: 220 29% 91%; /* Light Gray Border (hsl(220, 29%, 91%) for #e2e8f0) */
-    --input: 220 29% 91%; /* Input border (background will be var(--background)) */
-    --ring: 217 91% 60%; /* Arcadis Blue for focus rings */
-
-    --radius: 0.5rem;
-
-    /* Sidebar Light Theme */
-    --sidebar-background: 220 13% 96%; /* Off-white (hsl(220, 13%, 96%) for #f3f4f6) */
-    --sidebar-foreground: 227 58% 21%; /* Dark Navy Blue */
-    --sidebar-primary: 217 91% 60%; /* Arcadis Blue */
-    --sidebar-primary-foreground: 0 0% 100%; /* White */
-    --sidebar-accent: 220 87% 93%; /* Very Light Blue */
-    --sidebar-accent-foreground: 224 63% 33%; /* Darker Blue */
-    --sidebar-border: 220 29% 91%; /* Light Gray Border */
-    --sidebar-ring: 217 91% 60%; /* Arcadis Blue */
+    /* === COULEURS DE BASE PERFECTIONNÉES === */
+    --background: 0 0% 99%; /* #fcfcfc - Fond ultra-propre */
+    --foreground: 0 0% 3%; /* #080808 - Noir profond et lisible */
+    
+    /* === SYSTÈME DE CARTES COHÉRENT === */
+    --card: 0 0% 100%; /* #ffffff - Cartes blanches pures */
+    --card-foreground: 0 0% 3%; /* #080808 - Texte parfaitement lisible */
+    --card-border: 0 0% 90%; /* #e6e6e6 - Bordures subtiles mais visibles */
+    --card-hover: 0 0% 97%; /* #f7f7f7 - Effet hover des cartes */
+    
+    /* === SURFACES ET OVERLAYS === */
+    --popover: 0 0% 100%; /* #ffffff */
+    --popover-foreground: 0 0% 3%; /* #080808 */
+    --modal: 0 0% 100%; /* #ffffff */
+    --modal-foreground: 0 0% 3%; /* #080808 */
+    
+    /* === COULEUR PRIMAIRE ARCADIS === */
+    --primary: 217 91% 58%; /* #2563eb - Bleu Arcadis premium */
+    --primary-foreground: 0 0% 100%; /* #ffffff */
+    --primary-hover: 217 91% 53%; /* Version hover plus foncée */
+    --primary-subtle: 217 91% 97%; /* #eff6ff - Fond bleu très subtil */
+    
+    /* === COULEURS SECONDAIRES === */
+    --secondary: 0 0% 96%; /* #f5f5f5 */
+    --secondary-foreground: 0 0% 15%; /* #262626 */
+    --secondary-hover: 0 0% 93%; /* #ededed */
+    
+    /* === COULEURS MUTED === */
+    --muted: 0 0% 96%; /* #f5f5f5 */
+    --muted-foreground: 0 0% 40%; /* #666666 - Contraste optimal */
+    
+    /* === COULEURS ACCENT === */
+    --accent: 0 0% 96%; /* #f5f5f5 */
+    --accent-foreground: 0 0% 3%; /* #080808 */
+    --accent-hover: 0 0% 93%; /* #ededed */
+    
+    /* === COULEURS D'ÉTAT === */
+    --success: 142 71% 45%; /* #22c55e - Vert success */
+    --success-foreground: 0 0% 100%; /* #ffffff */
+    --success-subtle: 142 71% 97%; /* #f0fdf4 */
+    
+    --warning: 38 92% 50%; /* #f59e0b - Orange warning */
+    --warning-foreground: 0 0% 100%; /* #ffffff */
+    --warning-subtle: 38 92% 97%; /* #fffbeb */
+    
+    --destructive: 0 84% 60%; /* #ef4444 - Rouge error */
+    --destructive-foreground: 0 0% 100%; /* #ffffff */
+    --destructive-subtle: 0 84% 97%; /* #fef2f2 */
+    
+    --info: 199 89% 48%; /* #0ea5e9 - Bleu info */
+    --info-foreground: 0 0% 100%; /* #ffffff */
+    --info-subtle: 199 89% 97%; /* #f0f9ff */
+    
+    /* === BORDURES ET INPUTS === */
+    --border: 0 0% 90%; /* #e6e6e6 - Bordures standards */
+    --input: 0 0% 90%; /* #e6e6e6 - Bordures des inputs */
+    --input-hover: 0 0% 85%; /* #d9d9d9 - Hover des inputs */
+    --input-focus: 217 91% 58%; /* #2563eb - Focus bleu */
+    --ring: 217 91% 58%; /* #2563eb - Ring de focus */
+    
+    /* === ÉCHELLE DE GRIS PERFECTIONNÉE === */
+    --gray-50: 0 0% 98%; /* #fafafa */
+    --gray-100: 0 0% 96%; /* #f5f5f5 */
+    --gray-200: 0 0% 93%; /* #ededed */
+    --gray-300: 0 0% 85%; /* #d9d9d9 */
+    --gray-400: 0 0% 64%; /* #a3a3a3 */
+    --gray-500: 0 0% 45%; /* #737373 */
+    --gray-600: 0 0% 32%; /* #525252 */
+    --gray-700: 0 0% 26%; /* #424242 */
+    --gray-800: 0 0% 15%; /* #262626 */
+    --gray-900: 0 0% 9%; /* #171717 */
+    --gray-950: 0 0% 4%; /* #0a0a0a */
+    
+    /* === PALETTE ARCADIS PERFECTIONNÉE === */
+    --arcadis-blue-50: 217 91% 97%; /* #eff6ff */
+    --arcadis-blue-100: 217 91% 93%; /* #dbeafe */
+    --arcadis-blue-200: 217 91% 85%; /* #bfdbfe */
+    --arcadis-blue-300: 217 91% 73%; /* #93c5fd */
+    --arcadis-blue-400: 217 91% 65%; /* #60a5fa */
+    --arcadis-blue-500: 217 91% 58%; /* #2563eb */
+    --arcadis-blue-600: 217 91% 53%; /* #1d4ed8 */
+    --arcadis-blue-700: 217 91% 48%; /* #1e40af */
+    --arcadis-blue-800: 217 91% 43%; /* #1e3a8a */
+    --arcadis-blue-900: 217 91% 38%; /* #1e3a8a */
+    
+    /* === COULEURS DE STATUT KANBAN === */
+    --status-todo: 0 0% 45%; /* #737373 - Gris neutre */
+    --status-todo-bg: 0 0% 98%; /* #fafafa */
+    
+    --status-progress: 38 92% 50%; /* #f59e0b - Orange */
+    --status-progress-bg: 38 92% 97%; /* #fffbeb */
+    
+    --status-review: 199 89% 48%; /* #0ea5e9 - Bleu */
+    --status-review-bg: 199 89% 97%; /* #f0f9ff */
+    
+    --status-done: 142 71% 45%; /* #22c55e - Vert */
+    --status-done-bg: 142 71% 97%; /* #f0fdf4 */
+    
+    /* === PRIORITÉS DES TÂCHES === */
+    --priority-low: 142 71% 45%; /* #22c55e - Vert */
+    --priority-low-bg: 142 71% 97%; /* #f0fdf4 */
+    
+    --priority-medium: 38 92% 50%; /* #f59e0b - Orange */
+    --priority-medium-bg: 38 92% 97%; /* #fffbeb */
+    
+    --priority-high: 0 84% 60%; /* #ef4444 - Rouge */
+    --priority-high-bg: 0 84% 97%; /* #fef2f2 */
+    
+    --priority-urgent: 316 70% 50%; /* #c026d3 - Violet */
+    --priority-urgent-bg: 316 70% 97%; /* #fdf4ff */
+    
+    /* === TYPOGRAPHIE MODERNE === */
+    --font-family-sans: "Inter", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --font-family-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    
+    /* === ESPACEMENTS PERFECTIONNÉS === */
+    --radius-xs: 4px;
+    --radius-sm: 6px;
+    --radius-md: 8px;
+    --radius-lg: 12px;
+    --radius-xl: 16px;
+    --radius-2xl: 24px;
+    
+    /* === ANIMATIONS FLUIDES === */
+    --duration-fast: 150ms;
+    --duration-normal: 200ms;
+    --duration-slow: 300ms;
+    --duration-slower: 500ms;
+    
+    --easing-ease-out: cubic-bezier(0.4, 0, 0.2, 1);
+    --easing-ease-in-out: cubic-bezier(0.4, 0, 0.6, 1);
+    --easing-bounce: cubic-bezier(0.68, -0.55, 0.27, 1.55);
+    --easing-spring: cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    
+    /* === OMBRES ÉLÉGANTES === */
+    --shadow-xs: 0 1px 2px 0 rgb(0 0 0 / 0.02);
+    --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.04), 0 1px 2px -1px rgb(0 0 0 / 0.02);
+    --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.06), 0 2px 4px -2px rgb(0 0 0 / 0.03);
+    --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.08), 0 4px 6px -4px rgb(0 0 0 / 0.03);
+    --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.10), 0 8px 10px -6px rgb(0 0 0 / 0.04);
+    --shadow-2xl: 0 25px 50px -12px rgb(0 0 0 / 0.15);
+    
+    /* === FOCUS STATES PERFECTIONNÉS === */
+    --focus-ring: 0 0 0 3px hsl(var(--primary) / 0.12);
+    --focus-ring-offset: 2px;
+    --focus-ring-width: 2px;
   }
 
+  /* === MODE SOMBRE COHÉRENT === */
   .dark {
-    --background: 222 39% 11%; /* Almost Black (hsl(222, 39%, 11%) for #111827) */
-    --foreground: 220 13% 90%; /* Light Gray (hsl(220, 13%, 90%) for #e5e7eb) */
-
-    --card: 220 29% 17%; /* Dark Gray (hsl(220, 29%, 17%) for #1f2937) */
-    --card-foreground: 220 13% 90%; /* Light Gray */
-
-    --popover: 220 29% 17%; /* Dark Gray */
-    --popover-foreground: 220 13% 90%; /* Light Gray */
-
-    --primary: 217 91% 60%; /* Arcadis Blue (hsl(217, 91%, 60%) for #3b82f6) */
-    --primary-foreground: 0 0% 100%; /* White */
-
-    --secondary: 220 19% 27%; /* Medium-Dark Gray (hsl(220, 19%, 27%) for #374151) */
-    --secondary-foreground: 220 13% 90%; /* Light Gray */
-
-    --muted: 220 19% 27%; /* Medium-Dark Gray */
-    --muted-foreground: 220 10% 65%; /* Medium Light Gray (hsl(220, 10%, 65%) for #9ca3af) */
-
-    --accent: 221 83% 53%; /* Brighter Blue for Dark Mode (hsl(221, 83%, 53%) for #2563eb) */
-    --accent-foreground: 220 13% 90%; /* Light Gray */
-
-    --destructive: 0 63% 51%; /* Red (hsl(0, 63%, 51%) for #ef4444) */
-    --destructive-foreground: 0 0% 100%; /* White */
-
-    --border: 220 14% 36%; /* Medium Gray Border (hsl(220, 14%, 36%) for #4b5563) */
-    --input: 220 14% 36%; /* Input border (background will be var(--background)) */
-    --ring: 217 91% 60%; /* Arcadis Blue for focus rings */
-
-    /* Sidebar Dark Theme */
-    --sidebar-background: 220 29% 17%; /* Dark Gray, same as card */
-    --sidebar-foreground: 220 13% 90%; /* Light Gray */
-    --sidebar-primary: 217 91% 60%; /* Arcadis Blue */
-    --sidebar-primary-foreground: 0 0% 100%; /* White */
-    --sidebar-accent: 221 83% 53%; /* Brighter Blue */
-    --sidebar-accent-foreground: 220 13% 90%; /* Light Gray */
-    --sidebar-border: 220 14% 36%; /* Medium Gray Border */
-    --sidebar-ring: 217 91% 60%; /* Arcadis Blue */
+    --background: 0 0% 4%; /* #0a0a0a - Fond ultra-sombre */
+    --foreground: 0 0% 97%; /* #f7f7f7 - Texte ultra-clair */
+    
+    --card: 0 0% 7%; /* #121212 - Cartes sombres mais visibles */
+    --card-foreground: 0 0% 97%; /* #f7f7f7 */
+    --card-border: 0 0% 15%; /* #262626 - Bordures visibles */
+    --card-hover: 0 0% 9%; /* #171717 */
+    
+    --popover: 0 0% 7%; /* #121212 */
+    --popover-foreground: 0 0% 97%; /* #f7f7f7 */
+    --modal: 0 0% 7%; /* #121212 */
+    --modal-foreground: 0 0% 97%; /* #f7f7f7 */
+    
+    --primary: 217 91% 65%; /* #60a5fa - Bleu plus clair en mode sombre */
+    --primary-foreground: 0 0% 4%; /* #0a0a0a */
+    --primary-hover: 217 91% 70%; /* #93c5fd */
+    --primary-subtle: 217 91% 8%; /* #172554 */
+    
+    --secondary: 0 0% 15%; /* #262626 */
+    --secondary-foreground: 0 0% 97%; /* #f7f7f7 */
+    --secondary-hover: 0 0% 18%; /* #2d2d2d */
+    
+    --muted: 0 0% 15%; /* #262626 */
+    --muted-foreground: 0 0% 65%; /* #a3a3a3 */
+    
+    --accent: 0 0% 15%; /* #262626 */
+    --accent-foreground: 0 0% 97%; /* #f7f7f7 */
+    --accent-hover: 0 0% 18%; /* #2d2d2d */
+    
+    --success: 142 71% 50%; /* #16a34a */
+    --success-foreground: 0 0% 97%; /* #f7f7f7 */
+    --success-subtle: 142 71% 8%; /* #14532d */
+    
+    --warning: 38 92% 55%; /* #f59e0b */
+    --warning-foreground: 0 0% 4%; /* #0a0a0a */
+    --warning-subtle: 38 92% 8%; /* #451a03 */
+    
+    --destructive: 0 84% 65%; /* #f87171 */
+    --destructive-foreground: 0 0% 97%; /* #f7f7f7 */
+    --destructive-subtle: 0 84% 8%; /* #450a0a */
+    
+    --info: 199 89% 55%; /* #0ea5e9 */
+    --info-foreground: 0 0% 97%; /* #f7f7f7 */
+    --info-subtle: 199 89% 8%; /* #0c4a6e */
+    
+    --border: 0 0% 15%; /* #262626 */
+    --input: 0 0% 15%; /* #262626 */
+    --input-hover: 0 0% 18%; /* #2d2d2d */
+    --input-focus: 217 91% 65%; /* #60a5fa */
+    --ring: 217 91% 65%; /* #60a5fa */
+    
+    /* Statuts Kanban mode sombre */
+    --status-todo: 0 0% 65%; /* #a3a3a3 */
+    --status-todo-bg: 0 0% 7%; /* #121212 */
+    
+    --status-progress: 38 92% 55%; /* #f59e0b */
+    --status-progress-bg: 38 92% 8%; /* #451a03 */
+    
+    --status-review: 199 89% 55%; /* #0ea5e9 */
+    --status-review-bg: 199 89% 8%; /* #0c4a6e */
+    
+    --status-done: 142 71% 50%; /* #16a34a */
+    --status-done-bg: 142 71% 8%; /* #14532d */
+    
+    /* Priorités mode sombre */
+    --priority-low: 142 71% 50%; /* #16a34a */
+    --priority-low-bg: 142 71% 8%; /* #14532d */
+    
+    --priority-medium: 38 92% 55%; /* #f59e0b */
+    --priority-medium-bg: 38 92% 8%; /* #451a03 */
+    
+    --priority-high: 0 84% 65%; /* #f87171 */
+    --priority-high-bg: 0 84% 8%; /* #450a0a */
+    
+    --priority-urgent: 316 70% 60%; /* #d946ef */
+    --priority-urgent-bg: 316 70% 8%; /* #581c87 */
   }
-}
 
-@layer base {
+  /* === STYLES DE BASE === */
   * {
-    @apply border-border;
+    border-color: hsl(var(--border));
+    box-sizing: border-box;
+  }
+
+  html {
+    font-family: var(--font-family-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
   }
 
   body {
-    @apply bg-background text-foreground font-sans;
-    -webkit-font-smoothing: antialiased; /* Améliore le rendu des polices */
-    -moz-osx-font-smoothing: grayscale; /* Améliore le rendu des polices */
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+    font-feature-settings: "rlig" 1, "calt" 1;
+    line-height: 1.6;
+    transition: background-color var(--duration-normal) var(--easing-ease-out);
   }
 
-  /* Les dégradés Arcadis sont conservés tels quels, mais pourraient aussi utiliser des variables CSS si besoin */
-  .arcadis-gradient {
-    background: linear-gradient(135deg, hsl(var(--primary) / 0.8) 0%, hsl(var(--primary)) 50%, hsl(var(--primary) / 1.2) 100%);
+  /* === SCROLLBARS MODERNES === */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
   }
 
-  .arcadis-gradient-subtle {
-    background: linear-gradient(135deg, hsl(var(--accent)) 0%, hsl(var(--secondary)) 100%);
+  ::-webkit-scrollbar-track {
+    background: hsl(var(--muted));
+    border-radius: var(--radius-sm);
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: hsl(var(--muted-foreground) / 0.3);
+    border-radius: var(--radius-sm);
+    transition: background var(--duration-fast) var(--easing-ease-out);
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--muted-foreground) / 0.5);
+  }
+
+  /* === SÉLECTION DE TEXTE === */
+  ::selection {
+    background-color: hsl(var(--primary) / 0.2);
+    color: hsl(var(--foreground));
   }
 }
 
+/* ===============================================
+   COMPOSANTS UI UNIFIÉS
+   =============================================== */
+
 @layer components {
-  /* Ces classes personnalisées pourraient être remplacées par l'utilisation directe 
-     des composants Button de shadcn/ui avec les bonnes variantes 
-     pour une meilleure cohérence avec le thème. */
-  .arcadis-card {
-    @apply bg-card text-card-foreground rounded-lg shadow-sm border p-6 transition-all duration-200 hover:shadow-md;
+  
+  /* === SYSTÈME DE CARTES UNIFIÉ === */
+  .card-unified {
+    @apply bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm;
+    background-color: hsl(var(--card)) !important;
+    color: hsl(var(--card-foreground)) !important;
+    border-color: hsl(var(--card-border)) !important;
+    transition: all var(--duration-normal) var(--easing-ease-out);
   }
-
-  .arcadis-button-primary {
-    /* Exemple: utiliser la variante par défaut du bouton shadcn/ui */
-    @apply bg-primary text-primary-foreground hover:bg-primary/90 font-medium px-4 py-2 rounded-md transition-colors duration-200;
+  
+  .card-unified:hover {
+    background-color: hsl(var(--card-hover)) !important;
+    box-shadow: var(--shadow-md);
+    transform: translateY(-1px);
   }
-
-  .arcadis-button-secondary {
-    /* Exemple: utiliser la variante outline du bouton shadcn/ui */
-    @apply border border-primary bg-background text-primary hover:bg-accent hover:text-accent-foreground font-medium px-4 py-2 rounded-md transition-colors duration-200;
+  
+  /* === CARTES KANBAN PERFECTIONNÉES === */
+  .kanban-column {
+    @apply bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4;
+    background-color: hsl(var(--card)) !important;
+    border-color: hsl(var(--card-border)) !important;
+    box-shadow: var(--shadow-sm);
+    transition: all var(--duration-normal) var(--easing-ease-out);
+  }
+  
+  .kanban-column:hover {
+    box-shadow: var(--shadow-md);
+  }
+  
+  .kanban-card {
+    @apply bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4 mb-3 cursor-pointer;
+    background-color: hsl(var(--card)) !important;
+    color: hsl(var(--card-foreground)) !important;
+    border-color: hsl(var(--card-border)) !important;
+    box-shadow: var(--shadow-xs);
+    transition: all var(--duration-fast) var(--easing-ease-out);
+  }
+  
+  .kanban-card:hover {
+    box-shadow: var(--shadow-md);
+    transform: translateY(-2px);
+    border-color: hsl(var(--primary) / 0.5);
+  }
+  
+  .kanban-card.dragging {
+    transform: rotate(2deg) scale(1.02);
+    box-shadow: var(--shadow-xl);
+    border-color: hsl(var(--primary));
+    z-index: 1000;
+  }
+  
+  /* === BADGES DE STATUT UNIFIÉS === */
+  .status-badge {
+    @apply inline-flex items-center px-3 py-1 rounded-full text-xs font-medium;
+    transition: all var(--duration-fast) var(--easing-ease-out);
+  }
+  
+  .status-badge.todo {
+    background-color: hsl(var(--status-todo-bg));
+    color: hsl(var(--status-todo));
+    border: 1px solid hsl(var(--status-todo) / 0.2);
+  }
+  
+  .status-badge.in-progress {
+    background-color: hsl(var(--status-progress-bg));
+    color: hsl(var(--status-progress));
+    border: 1px solid hsl(var(--status-progress) / 0.2);
+  }
+  
+  .status-badge.in-review {
+    background-color: hsl(var(--status-review-bg));
+    color: hsl(var(--status-review));
+    border: 1px solid hsl(var(--status-review) / 0.2);
+  }
+  
+  .status-badge.done {
+    background-color: hsl(var(--status-done-bg));
+    color: hsl(var(--status-done));
+    border: 1px solid hsl(var(--status-done) / 0.2);
+  }
+  
+  /* === BADGES DE PRIORITÉ === */
+  .priority-badge {
+    @apply inline-flex items-center px-2 py-1 rounded text-xs font-medium;
+    transition: all var(--duration-fast) var(--easing-ease-out);
+  }
+  
+  .priority-badge.low {
+    background-color: hsl(var(--priority-low-bg));
+    color: hsl(var(--priority-low));
+  }
+  
+  .priority-badge.medium {
+    background-color: hsl(var(--priority-medium-bg));
+    color: hsl(var(--priority-medium));
+  }
+  
+  .priority-badge.high {
+    background-color: hsl(var(--priority-high-bg));
+    color: hsl(var(--priority-high));
+  }
+  
+  .priority-badge.urgent {
+    background-color: hsl(var(--priority-urgent-bg));
+    color: hsl(var(--priority-urgent));
+  }
+  
+  /* === INPUTS MODERNISÉS === */
+  .input-unified {
+    @apply w-full px-4 py-3 text-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg;
+    background-color: hsl(var(--card)) !important;
+    color: hsl(var(--card-foreground)) !important;
+    border-color: hsl(var(--input)) !important;
+    transition: all var(--duration-fast) var(--easing-ease-out);
+  }
+  
+  .input-unified::placeholder {
+    color: hsl(var(--muted-foreground));
+  }
+  
+  .input-unified:hover {
+    border-color: hsl(var(--input-hover)) !important;
+  }
+  
+  .input-unified:focus {
+    outline: none;
+    border-color: hsl(var(--input-focus)) !important;
+    box-shadow: var(--focus-ring);
+  }
+  
+  /* === BOUTONS UNIFIÉS === */
+  .btn-primary {
+    @apply inline-flex items-center justify-center px-6 py-3 text-sm font-medium rounded-lg;
+    background-color: hsl(var(--primary)) !important;
+    color: hsl(var(--primary-foreground)) !important;
+    border: 1px solid hsl(var(--primary));
+    transition: all var(--duration-fast) var(--easing-ease-out);
+  }
+  
+  .btn-primary:hover {
+    background-color: hsl(var(--primary-hover)) !important;
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-md);
+  }
+  
+  .btn-secondary {
+    @apply inline-flex items-center justify-center px-6 py-3 text-sm font-medium rounded-lg;
+    background-color: hsl(var(--secondary)) !important;
+    color: hsl(var(--secondary-foreground)) !important;
+    border: 1px solid hsl(var(--border));
+    transition: all var(--duration-fast) var(--easing-ease-out);
+  }
+  
+  .btn-secondary:hover {
+    background-color: hsl(var(--secondary-hover)) !important;
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-sm);
+  }
+  
+  /* === LAYOUTS === */
+  .layout-container {
+    @apply max-w-7xl mx-auto px-4 sm:px-6 lg:px-8;
+  }
+  
+  .layout-centered {
+    @apply max-w-4xl mx-auto px-4 sm:px-6 lg:px-8;
+  }
+  
+  .layout-narrow {
+    @apply max-w-2xl mx-auto px-4 sm:px-6 lg:px-8;
+  }
+  
+  /* === GRILLES === */
+  .grid-cards {
+    @apply grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6;
+  }
+  
+  .grid-auto-fit {
+    @apply grid gap-6;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  }
+  
+  /* === TYPOGRAPHIE UNIFIÉE === */
+  .text-display {
+    @apply text-4xl lg:text-5xl font-bold tracking-tight;
+    color: hsl(var(--foreground));
+    font-family: var(--font-family-sans);
+  }
+  
+  .text-heading-1 {
+    @apply text-3xl lg:text-4xl font-bold tracking-tight;
+    color: hsl(var(--foreground));
+  }
+  
+  .text-heading-2 {
+    @apply text-2xl lg:text-3xl font-semibold tracking-tight;
+    color: hsl(var(--foreground));
+  }
+  
+  .text-heading-3 {
+    @apply text-xl lg:text-2xl font-semibold tracking-tight;
+    color: hsl(var(--foreground));
+  }
+  
+  .text-body-lg {
+    @apply text-lg leading-relaxed;
+    color: hsl(var(--foreground));
+  }
+  
+  .text-body {
+    @apply text-base leading-relaxed;
+    color: hsl(var(--foreground));
+  }
+  
+  .text-body-sm {
+    @apply text-sm leading-relaxed;
+    color: hsl(var(--muted-foreground));
+  }
+  
+  .text-label {
+    @apply text-sm font-medium;
+    color: hsl(var(--foreground));
+  }
+  
+  .text-caption {
+    @apply text-xs;
+    color: hsl(var(--muted-foreground));
+  }
+  
+  /* === ANIMATIONS === */
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateX(-20px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+  
+  @keyframes scaleIn {
+    from { opacity: 0; transform: scale(0.95); }
+    to { opacity: 1; transform: scale(1); }
+  }
+  
+  .animate-fade-in {
+    animation: fadeIn var(--duration-normal) var(--easing-ease-out);
+  }
+  
+  .animate-slide-in {
+    animation: slideIn var(--duration-normal) var(--easing-ease-out);
+  }
+  
+  .animate-scale-in {
+    animation: scaleIn var(--duration-normal) var(--easing-ease-out);
+  }
+  
+  /* === ÉTATS DE LOADING === */
+  .loading-skeleton {
+    @apply animate-pulse bg-gray-200 dark:bg-gray-700 rounded;
+  }
+  
+  .loading-spinner {
+    @apply animate-spin rounded-full border-2 border-gray-200 border-t-primary;
+  }
+  
+  /* === DRAG & DROP ZONES === */
+  .drop-zone {
+    transition: all var(--duration-fast) var(--easing-ease-out);
+  }
+  
+  .drop-zone.drag-over {
+    background-color: hsl(var(--primary-subtle)) !important;
+    border-color: hsl(var(--primary)) !important;
+    border-style: dashed;
+    transform: scale(1.02);
+  }
+  
+  /* === NOTIFICATIONS === */
+  .notification-success {
+    @apply border-l-4 p-4 rounded-r-lg;
+    background-color: hsl(var(--success-subtle));
+    border-left-color: hsl(var(--success));
+    color: hsl(var(--success));
+  }
+  
+  .notification-warning {
+    @apply border-l-4 p-4 rounded-r-lg;
+    background-color: hsl(var(--warning-subtle));
+    border-left-color: hsl(var(--warning));
+    color: hsl(var(--warning));
+  }
+  
+  .notification-error {
+    @apply border-l-4 p-4 rounded-r-lg;
+    background-color: hsl(var(--destructive-subtle));
+    border-left-color: hsl(var(--destructive));
+    color: hsl(var(--destructive));
+  }
+  
+  .notification-info {
+    @apply border-l-4 p-4 rounded-r-lg;
+    background-color: hsl(var(--info-subtle));
+    border-left-color: hsl(var(--info));
+    color: hsl(var(--info));
   }
 }

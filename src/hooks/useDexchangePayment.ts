@@ -29,13 +29,23 @@ export const useDexchangePayment = (): UseDexchangePaymentReturn => {
         setError(null);
         try {
             const response = await dexchangeApi.initiatePayment(payload);
+            
+            // Vérifier si c'est Orange Money (qui n'utilise pas d'URL de paiement)
+            const isOrangeMoney = payload.paymentMethod === 'orange_money';
+            
+            // Pour Orange Money, pas besoin d'URL de redirection
             const redirectUrl = response.transaction.cashout_url || response.transaction.successUrl;
+            
             if (redirectUrl) {
                 console.log("[useDexchangePayment] Redirection URL:", redirectUrl);
+            } else if (isOrangeMoney) {
+                console.log("[useDexchangePayment] Paiement Orange Money initié - pas d'URL nécessaire");
             }
+            
             toast.success("Paiement initié", {
-                description: `ID Transaction: ${response.transaction.transactionId}`,
+                description: `ID Transaction: ${response.transaction.transactionId}${isOrangeMoney ? ' (Orange Money SMS)' : ''}`,
             });
+            
             return response;
         } catch (err) {
             const apiError = err as DexchangeApiError;
